@@ -1,0 +1,2671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jarscape — small worlds in a jar</title>
+<style>
+  :root{
+    --ink: #f4ead9;
+    --ink-dim: #b9ae9a;
+    --amber: #f2a65a;
+    --moss: #9db08a;
+    --panel: rgba(20, 18, 24, 0.5);
+  }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:#0e0d12; overflow:hidden;
+    font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  canvas.grabbing{ cursor:grabbing; }
+
+  #vignette{
+    position:fixed; inset:0; pointer-events:none;
+    background: radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+  }
+
+  #ui{ position:fixed; inset:0; pointer-events:none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #ui > *{ pointer-events:auto; }
+
+  #title{
+    position:fixed; top:22px; left:26px;
+    color: var(--ink);
+    letter-spacing: 0.22em;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-family: Georgia, serif;
+    opacity: 0.85;
+  }
+  #title small{
+    display:block; margin-top:6px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    max-width: 230px;
+    line-height:1.5;
+  }
+
+  #hint{
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
+    color: var(--ink-dim);
+    font-size: 12.5px;
+    background: var(--panel);
+    padding: 8px 16px;
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+    transition: opacity 1.1s ease;
+    white-space: nowrap;
+  }
+  #hint.hidden{ opacity:0; pointer-events:none; }
+
+  #awaylog{
+    position:fixed; left:50%; bottom:70px; transform:translateX(-50%);
+    color: var(--ink);
+    background: var(--panel);
+    padding: 12px 18px;
+    border-radius: 14px;
+    backdrop-filter: blur(6px);
+    width: 280px;
+    opacity:0;
+    transition: opacity 1s ease;
+  }
+  #awaylog.show{ opacity:1; }
+  #awaylog .title{
+    font-size: 10.5px; letter-spacing:0.14em; text-transform:uppercase;
+    color: var(--ink-dim); margin-bottom: 8px; text-align:center;
+  }
+  #awaylog .row{
+    display:flex; align-items:baseline; gap:8px;
+    font-size: 12.5px; line-height:1.4; padding: 2px 0;
+  }
+  #awaylog .row .icon{ flex:0 0 auto; width:14px; text-align:center; opacity:0.85; }
+  #awaylog .row .text{ flex:1 1 auto; }
+  #awaylog .more{ font-size:11px; color: var(--ink-dim); text-align:center; margin-top:4px; }
+  #awaylog b{ color: var(--amber); }
+
+  #topright{
+    position:fixed; top:20px; right:20px;
+    display:flex; gap:8px;
+  }
+  .pill-btn{
+    appearance:none; border:none; cursor:pointer;
+    background: var(--panel);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+    transition: background 0.2s ease;
+  }
+  .pill-btn:hover{ background: rgba(242,166,90,0.22); }
+  .pill-btn:active{ transform: translateY(1px); }
+
+  #seedbar{
+    position:fixed; right:20px; bottom:20px;
+    display:flex; align-items:center; gap:10px;
+    background: var(--panel);
+    padding: 8px 10px 8px 14px;
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+  }
+  #seedlabel{
+    color: var(--ink-dim);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+  }
+  #seedlabel b{ color: var(--amber); font-weight: 600; }
+  #newworld{
+    appearance:none; border:none; cursor:pointer;
+    background: rgba(242,166,90,0.16);
+    color: var(--amber);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    transition: background 0.2s ease;
+  }
+  #newworld:hover{ background: rgba(242,166,90,0.28); }
+  #newworld:active{ transform: translateY(1px); }
+
+  .panel{
+    position:fixed; top:70px; right:20px; width:300px; max-height:70vh;
+    background: var(--panel); backdrop-filter: blur(10px);
+    border-radius: 16px; padding: 16px 16px 8px 16px;
+    color: var(--ink); overflow-y:auto;
+    display:none;
+  }
+  .panel.open{ display:block; }
+  .panel h3{
+    margin:0 0 10px 0; font-size:13px; letter-spacing:0.14em; text-transform:uppercase;
+    color: var(--ink-dim); font-family: Georgia, serif; font-weight:normal;
+  }
+  .almanac-cat{ font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color: var(--moss); margin:14px 0 6px 0; }
+  .almanac-entry{ margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .almanac-entry .name{ font-size:13.5px; color: var(--ink); }
+  .almanac-entry .name.locked{ color: var(--ink-dim); font-style:italic; }
+  .almanac-entry .meta{ font-size:11px; color: var(--ink-dim); margin-top:3px; }
+  .almanac-entry .desc{ font-size:11.5px; color: var(--ink-dim); margin-top:4px; line-height:1.5; font-family: -apple-system, sans-serif; }
+
+  .jar-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 8px 4px; border-radius:8px; cursor:pointer; font-size:12.5px;
+    gap: 8px;
+  }
+  .jar-row:hover{ background: rgba(255,255,255,0.06); }
+  .jar-row.active{ color: var(--amber); }
+  .jar-row .when{ color: var(--ink-dim); font-size:11px; flex: 0 0 auto; }
+  .jar-row .jar-name{ flex: 1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .jar-row .delete-btn{
+    flex: 0 0 auto; appearance:none; border:none; cursor:pointer; background:transparent;
+    color: var(--ink-dim); font-size: 14px; line-height:1; padding: 2px 6px; border-radius: 6px;
+  }
+  .jar-row .delete-btn:hover{ color: #e08a6f; background: rgba(224,138,111,0.15); }
+  .panel-header-row{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px;
+  }
+  .panel-header-row h3{ margin:0; }
+  .clear-all-btn{
+    appearance:none; border:none; cursor:pointer; background:transparent;
+    color: var(--ink-dim); font-size: 11px; font-family: -apple-system, sans-serif;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .clear-all-btn:hover{ color: #e08a6f; }
+
+  /* ============ ALMANAC BOOK ============ */
+  .book-overlay{
+    position:fixed; inset:0; z-index:20;
+    display:none; align-items:center; justify-content:center;
+    background: rgba(8,7,10,0);
+    transition: background 0.5s ease;
+  }
+  .book-overlay.open{ display:flex; background: rgba(8,7,10,0.72); }
+
+  .book{
+    position:relative; width:min(88vw,760px); height:min(78vh,480px);
+    perspective: 2200px;
+    transform: scale(0.88); opacity:0;
+    transition: transform 0.5s cubic-bezier(.2,.8,.2,1), opacity 0.4s ease;
+  }
+  .book-overlay.open .book{ transform: scale(1); opacity:1; }
+
+  .book-spread{
+    position:absolute; inset:0; display:flex;
+    background: #1c140d; border-radius: 6px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+  }
+  .book-spine{
+    position:absolute; left:50%; top:0; bottom:0; width:14px; margin-left:-7px;
+    background: linear-gradient(90deg, rgba(0,0,0,0.35), rgba(0,0,0,0) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.35));
+    pointer-events:none; z-index:3;
+  }
+  .book-page{
+    flex: 1 1 50%; position:relative; overflow:hidden;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(0,0,0,0.12), rgba(0,0,0,0) 55%),
+      linear-gradient(135deg, #ecdcb3, #ddc899 60%, #d3bb87);
+    box-shadow: inset 0 0 40px rgba(90,60,20,0.25);
+    padding: 26px 26px 20px 26px;
+  }
+  .book-page-left{ border-radius: 6px 0 0 6px; }
+  .book-page-right{ border-radius: 0 6px 6px 0; }
+  .book-page::before{
+    content:''; position:absolute; inset: 10px; pointer-events:none;
+    border: 1px solid rgba(90,60,25,0.35);
+    box-shadow: 0 0 0 4px rgba(90,60,25,0.08);
+  }
+
+  .frontispiece{ position:relative; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:#4a3826; }
+  .frontispiece-glyph{ font-size: 26px; color:#a6742f; margin-bottom:10px; }
+  .frontispiece-title{ font-family: Georgia, serif; font-size: 25px; line-height:1.25; letter-spacing:0.02em; color:#3c2c19; }
+  .frontispiece-rule{ width:70px; height:1px; background: #a6742f; margin: 16px 0; opacity:0.6; }
+  .frontispiece-desc{ font-family: Georgia, serif; font-style: italic; font-size: 12.5px; color:#6b5334; max-width: 220px; line-height:1.6; }
+
+  .book-tabs-rail{
+    position:absolute; top:38px; right:-30px; display:flex; flex-direction:column; gap:10px; z-index:6;
+  }
+  .book-tab{
+    appearance:none; border:none; cursor:pointer;
+    font-family: -apple-system, sans-serif; font-size: 11px; letter-spacing:0.06em; text-transform:uppercase;
+    color: #f4ead9; padding: 9px 12px 9px 14px; border-radius: 0 6px 6px 0;
+    background: #6b7d55; box-shadow: 2px 2px 6px rgba(0,0,0,0.4);
+    opacity:0.88; transform: translateX(0); transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  .book-tab:hover{ transform: translateX(4px); opacity:1; }
+  .book-tab.active{ opacity:1; box-shadow: 3px 2px 8px rgba(0,0,0,0.45); }
+  .book-tab[data-cat="fauna"]{ background:#a6742f; }
+  .book-tab[data-cat="feature"]{ background:#6b6558; }
+
+  .book-page-content{
+    height: 100%; overflow-y: auto; padding-right: 40px; color:#4a3826;
+    animation: pageFade 0.35s ease;
+  }
+  @keyframes pageFade{ from{ opacity:0.2; transform: translateY(4px); } to{ opacity:1; transform: translateY(0); } }
+
+  .book-entry{ margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(90,60,25,0.22); }
+  .book-entry .book-entry-name{
+    font-family: Georgia, serif; font-size: 14.5px; letter-spacing: 0.03em;
+    color:#3c2c19; font-variant: small-caps;
+  }
+  .book-entry .book-entry-name::first-letter{ font-size: 1.5em; color:#a6742f; }
+  .book-entry.locked .book-entry-name{ font-style: italic; color:#8a7554; letter-spacing:0.15em; font-variant: normal; }
+  .book-entry .book-entry-meta{ font-family: Georgia, serif; font-style: italic; font-size: 11px; color:#7a6440; margin-top:2px; }
+  .book-entry .book-entry-desc{ font-family: -apple-system, sans-serif; font-size: 12px; color:#5a4830; margin-top:5px; line-height:1.55; }
+
+  .book-cover{
+    position:absolute; inset:0; border-radius: 6px;
+    background: linear-gradient(135deg, #3a2a18, #241a10 60%, #1a1209);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.55), inset 0 0 0 6px rgba(201,162,39,0.12);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transform-origin: left center; transform: rotateY(0deg);
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    transition: transform 0.7s cubic-bezier(.3,.7,.2,1);
+    cursor:pointer; z-index: 5;
+  }
+  .book-overlay.open .book-cover{ transform: rotateY(-165deg); transition-delay: 0.35s; }
+  .book-cover-sigil{
+    font-size: 30px; color:#c9a227; margin-bottom:14px;
+    text-shadow: 0 1px 0 #6b5310, 0 -1px 0 rgba(255,230,150,0.3);
+  }
+  .book-cover-title{
+    font-family: Georgia, serif; font-size: 26px; letter-spacing: 0.08em; text-transform:uppercase;
+    color:#c9a227; text-shadow: 0 1px 0 #6b5310, 0 -1px 0 rgba(255,230,150,0.25);
+  }
+  .book-cover-sub{
+    font-family: Georgia, serif; font-style: italic; font-size: 13px; color:#8a7248; margin-top:6px;
+  }
+
+  .book-close{
+    position:absolute; top:-42px; right:0;
+    appearance:none; border:none; cursor:pointer;
+    background: rgba(255,255,255,0.08); color: var(--ink-dim);
+    font-family: -apple-system, sans-serif; font-size: 12px;
+    padding: 7px 14px; border-radius: 999px;
+  }
+  .book-close:hover{ color: var(--ink); background: rgba(255,255,255,0.15); }
+
+  @media (max-width: 640px){
+    .book{ width: 94vw; height: 72vh; }
+    .book-spread{ flex-direction: column; }
+    .book-page{ flex-basis: 50%; padding: 16px 16px 12px 16px; }
+    .book-page-left{ border-radius: 6px 6px 0 0; display:none; }
+    .book-page-right{ border-radius: 6px; flex-basis: 100%; }
+    .book-spine{ display:none; }
+    .book-tabs-rail{ top:-32px; right:8px; flex-direction:row; gap:6px; }
+    .book-tab{ border-radius: 6px 6px 0 0; }
+    .book-page-content{ padding-right:0; padding-top: 36px; }
+  }
+
+  #introScreen{
+    position:fixed; inset:0; z-index:50;
+    background: radial-gradient(ellipse at 50% 42%, #1c1f2e 0%, #0a0a10 72%);
+    display:flex; align-items:center; justify-content:center;
+    opacity:1; transition: opacity 0.9s ease;
+    cursor: pointer;
+  }
+  #introScreen.hidden{ opacity:0; pointer-events:none; }
+  .intro-star{
+    position:absolute; width:2px; height:2px; border-radius:50%;
+    background: #f4ead9; opacity:0.5;
+    animation: introTwinkle 3.4s ease-in-out infinite;
+  }
+  @keyframes introTwinkle{ 0%,100%{ opacity:0.15; } 50%{ opacity:0.85; } }
+  .intro-content{
+    text-align:center; position:relative; z-index:1;
+    animation: introFadeIn 1.5s ease both;
+  }
+  @keyframes introFadeIn{
+    from{ opacity:0; transform: translateY(14px) scale(0.97); }
+    to{ opacity:1; transform: translateY(0) scale(1); }
+  }
+  .intro-sigil{
+    font-size: 32px; color: var(--amber); margin-bottom: 18px;
+    animation: introPulse 3s ease-in-out infinite;
+  }
+  @keyframes introPulse{
+    0%,100%{ opacity:0.65; transform:scale(1); }
+    50%{ opacity:1; transform:scale(1.14); }
+  }
+  .intro-title{
+    font-family: Georgia, serif; font-size: 54px; letter-spacing: 0.09em;
+    color: var(--ink); margin:0; text-shadow: 0 0 34px rgba(242,166,90,0.35);
+  }
+  .intro-tagline{
+    font-family: Georgia, serif; font-style: italic; color: var(--ink-dim);
+    font-size: 15px; margin-top: 16px; letter-spacing: 0.01em;
+  }
+  .intro-skip{
+    position: fixed; bottom: 28px; right: 28px; z-index:2;
+    appearance:none; border:none; cursor:pointer;
+    background: rgba(255,255,255,0.08); color: var(--ink-dim);
+    font-family: -apple-system, sans-serif; font-size: 12px;
+    padding: 9px 16px; border-radius: 999px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .intro-skip:hover{ background: rgba(255,255,255,0.16); color: var(--ink); }
+
+  #loading{
+    position:fixed; inset:0; background:#0e0d12; z-index:10;
+    display:flex; align-items:center; justify-content:center;
+    color: var(--ink-dim); font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px; letter-spacing: 0.08em; text-transform:uppercase;
+    transition: opacity 0.6s ease;
+  }
+</style>
+</head>
+<body>
+<div id="introScreen">
+  <div class="intro-content">
+    <div class="intro-sigil">✦</div>
+    <h1 class="intro-title">Jarscape</h1>
+    <p class="intro-tagline">Small worlds, watched more than played.</p>
+  </div>
+  <button class="intro-skip" id="introSkip">skip →</button>
+</div>
+<script>
+(function(){
+  var intro = document.getElementById('introScreen');
+  // a handful of twinkling stars for atmosphere, scattered once at load
+  for (var i=0;i<26;i++){
+    var s = document.createElement('div');
+    s.className = 'intro-star';
+    s.style.left = (Math.random()*100)+'%';
+    s.style.top = (Math.random()*100)+'%';
+    s.style.animationDelay = (Math.random()*3.4)+'s';
+    intro.appendChild(s);
+  }
+  var dismissed = false;
+  function dismissIntro(){
+    if (dismissed) return;
+    dismissed = true;
+    intro.classList.add('hidden');
+    setTimeout(function(){ intro.style.display = 'none'; }, 950);
+  }
+  document.getElementById('introSkip').addEventListener('click', function(e){
+    e.stopPropagation();
+    dismissIntro();
+  });
+  intro.addEventListener('click', dismissIntro);
+  setTimeout(dismissIntro, 4600);
+})();
+</script>
+<div id="stage"><canvas id="c"></canvas></div>
+<div id="vignette"></div>
+<div id="loading">reading the shelf…</div>
+<div id="ui">
+  <div id="title"><span id="jarNameLabel">the jar</span><small>A small procedural world, watched more than played. Drag to look. Scroll to get close. Click the ground to nudge it.</small></div>
+  <div id="hint">drag to orbit · scroll to zoom · click the ground to nudge something</div>
+  <div id="awaylog"></div>
+  <div id="topright">
+    <button class="pill-btn" id="almanacBtn">almanac</button>
+    <button class="pill-btn" id="jarsBtn">your jars</button>
+  </div>
+  <div class="panel" id="jarsPanel"><div class="panel-header-row"><h3>Your jars</h3><button class="clear-all-btn" id="clearAllBtn">clear all</button></div><div id="jarsBody"></div></div>
+  <div id="seedbar">
+    <span id="seedlabel">seed <b id="seedval">------</b></span>
+    <button id="newworld">grow a new jar</button>
+  </div>
+</div>
+
+<div id="bookOverlay" class="book-overlay">
+  <div class="book" id="almanacBook">
+    <div class="book-spread">
+      <div class="book-page book-page-left">
+        <div class="frontispiece">
+          <div class="frontispiece-glyph">✦</div>
+          <div class="frontispiece-title">The Living<br>Almanac</div>
+          <div class="frontispiece-rule"></div>
+          <div class="frontispiece-desc">A record of every form of life and stone catalogued across your jars.</div>
+        </div>
+      </div>
+      <div class="book-page book-page-right">
+        <div class="book-page-content" id="bookPageContent"></div>
+      </div>
+      <div class="book-spine"></div>
+    </div>
+    <div class="book-tabs-rail">
+      <button class="book-tab" data-cat="flora">Flora</button>
+      <button class="book-tab" data-cat="fauna">Fauna</button>
+      <button class="book-tab" data-cat="feature">Features</button>
+    </div>
+    <div class="book-cover" id="bookCover">
+      <div class="book-cover-sigil">✦</div>
+      <div class="book-cover-title">Almanac</div>
+      <div class="book-cover-sub">of the Jar</div>
+    </div>
+  </div>
+  <button class="book-close" id="bookCloseBtn" aria-label="Close">✕ close</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* =========================================================
+   RENDERER / SCENE / CAMERA
+   ========================================================= */
+var canvas = document.getElementById('c');
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x121017);
+
+var camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.05, 220);
+var target = new THREE.Vector3(0, 1.0, 0);
+var targetGoal = target.clone();
+var radiusGoal = null; // null == "no active auto-zoom, respect manual control"
+
+function focusOn(point){
+  targetGoal.copy(point);
+  radiusGoal = Math.min(orbit.radius, 1.5);
+}
+
+function resize(){
+  var w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* =========================================================
+   ORBIT CONTROLS
+   ========================================================= */
+var orbit = { theta: 0.62, phi: 1.05, radius: 8.2, minRadius: 0.5, maxRadius: 13, minPhi: 0.35, maxPhi: 1.48 };
+var pointer = { down:false, x:0, y:0 };
+var idleTimer = 0;
+
+function updateCameraFromOrbit(){
+  var sp = Math.sin(orbit.phi), cp = Math.cos(orbit.phi);
+  var st = Math.sin(orbit.theta), ct = Math.cos(orbit.theta);
+  camera.position.set(
+    target.x + orbit.radius * sp * ct,
+    target.y + orbit.radius * cp,
+    target.z + orbit.radius * sp * st
+  );
+  camera.lookAt(target);
+}
+
+var activePointers = new Map(); // pointerId -> {x,y}
+var pinch = { active:false, startDist:0, startRadius:0 };
+var gestureHadPinch = false;
+var pressStart = {x:0,y:0,t:0};
+
+function pinchDistance(){
+  var pts = Array.from(activePointers.values());
+  return Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+}
+
+canvas.addEventListener('pointerdown', function(e){
+  idleTimer = 0;
+  activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+
+  if (activePointers.size === 1){
+    gestureHadPinch = false;
+    pointer.down = true; pointer.x = e.clientX; pointer.y = e.clientY;
+    canvas.classList.add('grabbing');
+    pressStart.x = e.clientX; pressStart.y = e.clientY; pressStart.t = performance.now();
+  } else if (activePointers.size === 2){
+    pointer.down = false; // two fingers means pinch, not orbit-drag
+    gestureHadPinch = true;
+    pinch.active = true;
+    pinch.startDist = pinchDistance();
+    pinch.startRadius = orbit.radius;
+  }
+});
+
+window.addEventListener('pointermove', function(e){
+  if (!activePointers.has(e.pointerId)) return;
+  activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  idleTimer = 0;
+
+  if (pinch.active && activePointers.size === 2){
+    var dist = Math.max(pinchDistance(), 1);
+    var scale = pinch.startDist / dist;
+    orbit.radius = Math.min(orbit.maxRadius, Math.max(orbit.minRadius, pinch.startRadius * scale));
+    radiusGoal = null;
+    return;
+  }
+
+  if (!pointer.down || activePointers.size !== 1) return;
+  var dx = e.clientX - pointer.x, dy = e.clientY - pointer.y;
+  pointer.x = e.clientX; pointer.y = e.clientY;
+  orbit.theta -= dx * 0.0055;
+  orbit.phi = Math.min(orbit.maxPhi, Math.max(orbit.minPhi, orbit.phi - dy * 0.0045));
+});
+
+function endPointer(e){
+  activePointers.delete(e.pointerId);
+  if (activePointers.size < 2) pinch.active = false;
+  if (activePointers.size === 0){ pointer.down = false; canvas.classList.remove('grabbing'); }
+}
+window.addEventListener('pointerup', endPointer);
+window.addEventListener('pointercancel', endPointer);
+
+canvas.addEventListener('wheel', function(e){
+  e.preventDefault();
+  idleTimer = 0;
+  orbit.radius = Math.min(orbit.maxRadius, Math.max(orbit.minRadius, orbit.radius + e.deltaY * 0.01));
+  radiusGoal = null;
+}, { passive:false });
+
+canvas.addEventListener('pointerup', function(e){
+  if (gestureHadPinch) return;
+  var dt = performance.now() - pressStart.t;
+  var dist = Math.hypot(e.clientX-pressStart.x, e.clientY-pressStart.y);
+  if (dt < 350 && dist < 6) handleNudge(e.clientX, e.clientY);
+});
+
+var hintEl = document.getElementById('hint');
+var hintTimeout = setTimeout(function(){ hintEl.classList.add('hidden'); }, 7000);
+canvas.addEventListener('pointerdown', function(){
+  clearTimeout(hintTimeout);
+  hintEl.classList.add('hidden');
+}, { once:true });
+
+/* =========================================================
+   SEEDED RNG + NOISE
+   ========================================================= */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeNoise2D(rng){
+  var p = new Uint8Array(256);
+  for (var i=0;i<256;i++) p[i]=i;
+  for (var i=255;i>0;i--){
+    var j = Math.floor(rng()*(i+1));
+    var t=p[i]; p[i]=p[j]; p[j]=t;
+  }
+  var perm = new Uint8Array(512);
+  for (var i=0;i<512;i++) perm[i]=p[i & 255];
+  var grads = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+  function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+  function lerp(a,b,t){ return a+t*(b-a); }
+  function gradDot(hash,x,y){ var g = grads[hash & 7]; return g[0]*x + g[1]*y; }
+  return function(x,y){
+    var X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    var xf = x - Math.floor(x), yf = y - Math.floor(y);
+    var u = fade(xf), v = fade(yf);
+    var aa = perm[X + perm[Y]], ab = perm[X + perm[Y+1]];
+    var ba = perm[X+1 + perm[Y]], bb = perm[X+1 + perm[Y+1]];
+    var x1 = lerp(gradDot(aa,xf,yf), gradDot(ba,xf-1,yf), u);
+    var x2 = lerp(gradDot(ab,xf,yf-1), gradDot(bb,xf-1,yf-1), u);
+    return lerp(x1, x2, v);
+  };
+}
+
+function fbm(noise2D, x, y, octaves){
+  var amp=1, freq=1, sum=0, norm=0;
+  for (var i=0;i<octaves;i++){
+    sum += amp * noise2D(x*freq, y*freq);
+    norm += amp;
+    amp *= 0.52; freq *= 2.05;
+  }
+  return sum / norm;
+}
+
+function smoothstep(a,b,x){
+  var t = Math.min(1, Math.max(0, (x-a)/(b-a)));
+  return t*t*(3-2*t);
+}
+
+function lerpColor(a,b,t){
+  return new THREE.Color(a.r+(b.r-a.r)*t, a.g+(b.g-a.g)*t, a.b+(b.b-a.b)*t);
+}
+
+/* =========================================================
+   PROCEDURAL TEXTURES
+   ========================================================= */
+function makeRadialTexture(inner, outer, size){
+  size = size || 128;
+  var cnv = document.createElement('canvas'); cnv.width = cnv.height = size;
+  var ctx = cnv.getContext('2d');
+  var g = ctx.createRadialGradient(size/2,size/2,0, size/2,size/2,size/2);
+  g.addColorStop(0, inner); g.addColorStop(1, outer);
+  ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+  var tex = new THREE.CanvasTexture(cnv);
+  tex.needsUpdate = true;
+  return tex;
+}
+var fireflyTex = makeRadialTexture('rgba(214,255,190,1)', 'rgba(214,255,190,0)', 64);
+var burstTex = makeRadialTexture('rgba(255,244,214,0.95)', 'rgba(255,244,214,0)', 64);
+var dropletTex = makeRadialTexture('rgba(255,255,255,1)', 'rgba(210,235,245,0)', 64);
+var mistTex = makeRadialTexture('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 96);
+var glowTex = makeRadialTexture('rgba(255,238,200,0.95)', 'rgba(255,238,200,0)', 128);
+
+function makeBarkTexture(){
+  var w=64, h=128;
+  var cnv = document.createElement('canvas'); cnv.width=w; cnv.height=h;
+  var ctx = cnv.getContext('2d');
+  ctx.fillStyle = '#5a4330'; ctx.fillRect(0,0,w,h);
+  for (var i=0;i<140;i++){
+    var x = Math.random()*w, y0 = Math.random()*h*0.7, len = 10+Math.random()*28;
+    ctx.strokeStyle = 'rgba(0,0,0,'+(0.15+Math.random()*0.22).toFixed(2)+')';
+    ctx.lineWidth = 1+Math.random()*1.4;
+    ctx.beginPath(); ctx.moveTo(x,y0); ctx.lineTo(x+(Math.random()*4-2), y0+len); ctx.stroke();
+  }
+  var tex = new THREE.CanvasTexture(cnv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2,3);
+  return tex;
+}
+
+function makeLeafMottleTexture(){
+  var w=128, h=128;
+  var cnv = document.createElement('canvas'); cnv.width=w; cnv.height=h;
+  var ctx = cnv.getContext('2d');
+  ctx.fillStyle = '#b7b7b7'; ctx.fillRect(0,0,w,h);
+  for (var i=0;i<85;i++){
+    var x=Math.random()*w, y=Math.random()*h, r=4+Math.random()*8;
+    var v = 130+Math.floor(Math.random()*100);
+    ctx.fillStyle = 'rgba('+v+','+v+','+v+',0.5)';
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+  var tex = new THREE.CanvasTexture(cnv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2,2);
+  return tex;
+}
+
+function makeWaterTexture(){
+  var w=128, h=128;
+  var cnv = document.createElement('canvas'); cnv.width=w; cnv.height=h;
+  var ctx = cnv.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,w,h);
+  for (var i=0;i<18;i++){
+    var y = (i/11)*h + Math.random()*4;
+    ctx.strokeStyle = 'rgba(255,255,255,'+(0.35+Math.random()*0.3).toFixed(2)+')';
+    ctx.lineWidth = 1+Math.random();
+    ctx.beginPath(); ctx.moveTo(0,y);
+    for (var x=0;x<=w;x+=8){ ctx.lineTo(x, y+Math.sin(x*0.3+i)*3); }
+    ctx.stroke();
+  }
+  var tex = new THREE.CanvasTexture(cnv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3,3);
+  return tex;
+}
+
+/* =========================================================
+   WORLD CONSTANTS
+   ========================================================= */
+var JAR_R = 2.6, JAR_WALL_H = 2.35;
+var TERRAIN_HALF = 1.62;
+var AMPLITUDE = 1.05;
+var WATER_Y = 0.03;
+var CYCLE = 100;               // seconds per visual day/night loop
+var SIM_DAY_SECONDS = CYCLE;   // 1 sim-day == 1 loop, kept simple for now
+
+/* =========================================================
+   SPECIES / FEATURE REGISTRY  (the thing the almanac reads from)
+   ========================================================= */
+var REGISTRY = {
+  tree_pine: {
+    id:'tree_pine', name:'Hollow Pine', category:'flora', rarity:'common', lifespanDays: null,
+    stages:[
+      {name:'sprout', minAge:0,   scale:0.20},
+      {name:'sapling', minAge:1.5, scale:0.5},
+      {name:'young pine', minAge:5, scale:0.85},
+      {name:'pine', minAge:12, scale:1.15}
+    ],
+    description:'A narrow conifer that keeps thickening long after it looks finished.'
+  },
+  tree_bramble: {
+    id:'tree_bramble', name:'Bramble Tree', category:'flora', rarity:'common', lifespanDays: null,
+    stages:[
+      {name:'shoot', minAge:0, scale:0.22},
+      {name:'thicket', minAge:2, scale:0.55},
+      {name:'bramble', minAge:7, scale:1.0}
+    ],
+    description:'A round, tangled canopy that clumps together wherever the light lingers.'
+  },
+  tree_snow_pine: {
+    id:'tree_snow_pine', name:'Snow Pine', category:'flora', rarity:'uncommon', lifespanDays: null,
+    stages:[
+      {name:'sprout', minAge:0,   scale:0.20},
+      {name:'sapling', minAge:1.5, scale:0.5},
+      {name:'young pine', minAge:5, scale:0.85},
+      {name:'pine', minAge:12, scale:1.15}
+    ],
+    description:'Only grows where the jar runs cold — its needles stay pale year-round.'
+  },
+  fern: {
+    id:'fern', name:'Fern Cluster', category:'flora', rarity:'common', lifespanDays: null,
+    stages:[ {name:'sprout', minAge:0, scale:0.35}, {name:'fern', minAge:1, scale:1.0} ],
+    description:'Low, damp, and easy to overlook next to anything taller.'
+  },
+  reed: {
+    id:'reed', name:'Marsh Reed', category:'flora', rarity:'common', lifespanDays: null,
+    stages:[ {name:'shoot', minAge:0, scale:0.35}, {name:'reed', minAge:1, scale:1.0} ],
+    description:'Grows in thin clusters wherever the ground stays wet.'
+  },
+  driftwood: {
+    id:'driftwood', name:'Driftwood', category:'feature', rarity:'uncommon', lifespanDays:null, stages:null,
+    description:'Wood carried in and left behind at the waterline.'
+  },
+  stone: {
+    id:'stone', name:'Weathered Stone', category:'feature', rarity:'common', lifespanDays:null, stages:null,
+    description:'Rock scattered by the same slow forces that shaped the island.'
+  },
+  dwelling: {
+    id:'dwelling', name:'Small Dwelling', category:'feature', rarity:'uncommon', lifespanDays:null, stages:null,
+    description:'A single structure standing somewhere in the jar — its condition seems to change from world to world, cozy in some, abandoned in others.'
+  },
+  firefly: {
+    id:'firefly', name:'Firefly', category:'fauna', rarity:'uncommon', lifespanDays: 5,
+    stages:[
+      {name:'hatchling', minAge:0, scale:0.6},
+      {name:'firefly', minAge:1, scale:1.0}
+    ],
+    description:'Lives only a handful of days — the jar rarely runs out of them for long.'
+  },
+  snail: {
+    id:'snail', name:'Garden Snail', category:'fauna', rarity:'common', lifespanDays: 10,
+    stages:[
+      {name:'hatchling', minAge:0, scale:0.5},
+      {name:'snail', minAge:2, scale:1.0}
+    ],
+    description:'Slow and patient. Easy to miss unless you get close to the moss.'
+  },
+  frog: {
+    id:'frog', name:'Marsh Frog', category:'fauna', rarity:'uncommon', lifespanDays: 12,
+    stages:[ {name:'tadpole-grown', minAge:0, scale:0.55}, {name:'frog', minAge:1.5, scale:1.0} ],
+    description:'Sits still for long stretches, then crosses half the shore in one hop.'
+  },
+  fish: {
+    id:'fish', name:'Pond Fish', category:'fauna', rarity:'common', lifespanDays: 14,
+    stages:[ {name:'fry', minAge:0, scale:0.5}, {name:'fish', minAge:2, scale:1.0} ],
+    description:'Never leaves the water — you have to look down into the pond to find it.'
+  },
+  dragonfly: {
+    id:'dragonfly', name:'Dragonfly', category:'fauna', rarity:'uncommon', lifespanDays: 6,
+    stages:[ {name:'nymph-grown', minAge:0, scale:0.6}, {name:'dragonfly', minAge:1, scale:1.0} ],
+    description:'Darts low over the water in sharp, sudden lines.'
+  },
+  beetle: {
+    id:'beetle', name:'Ground Beetle', category:'fauna', rarity:'common', lifespanDays: 9,
+    stages:[ {name:'larva-grown', minAge:0, scale:0.55}, {name:'beetle', minAge:1, scale:1.0} ],
+    description:'Keeps to the dry, rocky ground and rarely wanders far from cover.'
+  }
+};
+var FAUNA_TARGETS = { firefly: 8, snail: 5, frog: 4, fish: 6, dragonfly: 5, beetle: 4 };
+var ALL_FAUNA = ['firefly','snail','frog','fish','dragonfly','beetle'];
+// movement archetype per species: fly (hovers, like firefly), crawl (ground, like snail), swim (pond-bound)
+var FAUNA_STYLE = {
+  // kind: fly/crawl/swim drives vertical placement. pattern 'wander' uses the generic
+  // damped-random-walk below, tuned per species via turnMin/turnMax/kick/damping so each
+  // one genuinely moves differently; 'hop' is its own dedicated state machine.
+  firefly:   { kind:'fly',   pattern:'wander', speed:0.35, glow:true,  baseScale:0.065, turnMin:1.2, turnMax:3.0, kick:0.55, damping:0.92 },
+  dragonfly: { kind:'fly',   pattern:'wander', speed:0.95, glow:false, baseScale:1.35, turnMin:0.45,turnMax:1.3, kick:1.35, damping:0.85 },
+  snail:     { kind:'crawl', pattern:'wander', speed:0.045,            baseScale:1.3,  turnMin:3.5, turnMax:7.5, kick:0.25, damping:0.96 },
+  beetle:    { kind:'crawl', pattern:'wander', speed:0.24,             baseScale:1.3,  turnMin:0.3, turnMax:0.9, kick:0.95, damping:0.78 },
+  frog:      { kind:'crawl', pattern:'hop',    speed:0,                baseScale:1.35 },
+  fish:      { kind:'swim',  pattern:'wander', speed:0.18,             baseScale:1.3,  turnMin:2.5, turnMax:5.0, kick:0.4,  damping:0.94 }
+};
+
+// each jar leans toward one dominant character, decided by its own seed — rather than
+// cramming mountains + rivers + coast into one small terrarium, the variety lives across jars
+var BIOMES = {
+  mountain: {
+    name: 'Highlands', ampMult: 1.35, pondMult: 0.8, rockBoost: 0.12, grassDensity: 90,
+    palette: { sand:0xcdbb92, grassA:0x436b3a, grassB:0x5f8a49, rock:0x7c766c, snow:0xf2efe6 },
+    trees: ['tree_pine','tree_snow_pine'], smallFlora: [], features: ['stone','dwelling'], fauna: ['beetle']
+  },
+  wetland: {
+    name: 'Lowlands', ampMult: 0.58, pondMult: 1.15, rockBoost: -0.12, grassDensity: 240,
+    palette: { sand:0xc9b98f, grassA:0x4f7a3f, grassB:0x79945a, rock:0x847b6c, snow:0xeef0e4 },
+    trees: ['tree_bramble'], smallFlora: ['fern','reed'], features: ['stone','dwelling'], fauna: ['frog','dragonfly']
+  },
+  coast: {
+    name: 'Coastline', ampMult: 0.78, pondMult: 1.3, rockBoost: 0.0, grassDensity: 190,
+    palette: { sand:0xe0cfa0, grassA:0x5c8148, grassB:0x7a9c5c, rock:0x8c8378, snow:0xf1ede2 },
+    trees: ['tree_pine','tree_bramble'], smallFlora: ['reed'], features: ['stone','driftwood','dwelling'], fauna: ['fish','dragonfly']
+  }
+};
+
+function computeStage(speciesId, age){
+  var stages = REGISTRY[speciesId].stages;
+  var idx = 0;
+  for (var i=0;i<stages.length;i++){ if (age >= stages[i].minAge) idx = i; }
+  return idx;
+}
+
+/* =========================================================
+   PERSISTENCE  (window.storage — localStorage is NOT available here)
+   ========================================================= */
+var storageAvailable = !!(window.storage && window.storage.get && window.storage.set);
+
+async function safeGet(key){
+  if (!storageAvailable) return null;
+  try {
+    var res = await window.storage.get(key, false);
+    if (!res || res.value === undefined) return null;
+    return JSON.parse(res.value);
+  } catch(e){ return null; }
+}
+async function safeSet(key, value){
+  if (!storageAvailable) return false;
+  try {
+    var res = await window.storage.set(key, JSON.stringify(value), false);
+    return !!res;
+  } catch(e){ return false; }
+}
+async function safeDelete(key){
+  if (!storageAvailable) return false;
+  try {
+    await window.storage.delete(key, false);
+    return true;
+  } catch(e){ return false; }
+}
+
+function seedHex(seed){ return (seed>>>0).toString(16).padStart(8,'0').slice(0,6); }
+function randomSeed(){ return (Math.random()*0xffffffff)>>>0; }
+
+/* =========================================================
+   TERRAIN SAMPLER  (pure function of seed — always reproducible)
+   ========================================================= */
+function createTerrainSampler(seed){
+  var rng = mulberry32(seed);
+  var noise2D = makeNoise2D(rng);
+  var ox = rng()*1000, oz = rng()*1000;
+  var biomeRoll = rng();
+  var biome = biomeRoll < 0.34 ? 'mountain' : (biomeRoll < 0.67 ? 'wetland' : 'coast');
+  var ampMult = BIOMES[biome].ampMult;
+
+  // water body — not every jar should be a centered island. some are mostly land with
+  // a small pond, some a proper lake, some open sea with a beach pushed off to one side.
+  var waterRoll = rng();
+  var waterBody = waterRoll < 0.22 ? 'pond' : waterRoll < 0.5 ? 'lake' : waterRoll < 0.72 ? 'island' : 'sea';
+  var landOffsetX = 0, landOffsetZ = 0;
+  if (waterBody === 'sea'){
+    var offAng = rng()*Math.PI*2;
+    var offDist = TERRAIN_HALF*0.62;
+    landOffsetX = Math.cos(offAng)*offDist; landOffsetZ = Math.sin(offAng)*offDist;
+  }
+
+  // domain warping — a second, independent noise field bends the sampling coordinates before
+  // the main terrain noise runs, so different seeds produce genuinely different island silhouettes
+  // (elongated, lobed, irregular) rather than the same rounded shape just scaled taller or flatter
+  var warpNoise = makeNoise2D(rng);
+  var warpFreq = 0.55 + rng()*0.85;
+  var warpAmp = 0.18 + rng()*0.4;
+  var wox = rng()*1000, woz = rng()*1000;
+  function heightAt(x,z){
+    var wx = x + fbm(warpNoise, x*warpFreq+wox, z*warpFreq+woz, 3)*warpAmp;
+    var wz = z + fbm(warpNoise, x*warpFreq+woz*0.6, z*warpFreq+wox*0.6, 3)*warpAmp;
+    var dist = Math.hypot(wx-landOffsetX, wz-landOffsetZ) / TERRAIN_HALF;
+    var n = fbm(noise2D, wx*0.95+ox, wz*0.95+oz, 5);
+    var falloff = smoothstep(0.32, 1.05, dist);
+    return ((n*0.5+0.5) - falloff*1.2) * AMPLITUDE * ampMult;
+  }
+  function slopeAt(x,z){
+    var d = 0.06;
+    var h0 = heightAt(x,z);
+    return Math.hypot(heightAt(x+d,z)-h0, heightAt(x,z+d)-h0) / d;
+  }
+  return { rng: rng, noise2D: noise2D, ox: ox, oz: oz, biome: biome, waterBody: waterBody, heightAt: heightAt, slopeAt: slopeAt };
+}
+
+/* =========================================================
+   ENTITY CREATION (fresh jar) + OFFLINE / LIVE SIMULATION
+   ========================================================= */
+function pondRadiusFor(biomeId, waterBody){
+  var bodyMult = waterBody === 'pond' ? 0.4 : waterBody === 'sea' ? 1.6 : waterBody === 'lake' ? 1.05 : 0.85; // 'island' default
+  return Math.min(JAR_R*0.97, JAR_R*0.9*BIOMES[biomeId].pondMult*bodyMult);
+}
+
+function createFreshEntities(sampler){
+  var rng = sampler.rng;
+  var biomeDef = BIOMES[sampler.biome];
+  var entities = { trees: [], smallFlora: [] };
+  ALL_FAUNA.forEach(function(sp){ entities[sp] = []; });
+
+  // computed once, locally, from the sampler itself — never the global currentPondRadius,
+  // which can be stale (still holding a *previous* jar's value) at the moment a brand-new
+  // jar's entities are first scattered, before rebuildStaticWorld has run for this seed
+  var pondR = pondRadiusFor(sampler.biome, sampler.waterBody);
+
+  var maxTrees = 44, id = 0;
+  var attempts = 0;
+  var treeSpecies = biomeDef.trees.length ? biomeDef.trees : ['tree_pine'];
+  while (entities.trees.length < maxTrees && attempts < maxTrees*14){
+    attempts++;
+    var x = (rng()*2-1) * TERRAIN_HALF * 0.92;
+    var z = (rng()*2-1) * TERRAIN_HALF * 0.92;
+    var h = sampler.heightAt(x,z);
+    if (h < 0.06 || h > 0.46) continue;
+    if (Math.hypot(x,z) < pondR + 0.12) continue; // the pond disc's actual size, not just terrain height, decides what's submerged
+    if (sampler.slopeAt(x,z) > 1.6) continue;
+    entities.trees.push({
+      id: 'tree'+(id++),
+      species: treeSpecies[Math.floor(rng()*treeSpecies.length)],
+      x: x, z: z, rot: rng()*Math.PI*2, variant: 0.8+rng()*0.55,
+      age: rng()*3, stage: 0
+    });
+  }
+  entities.trees.forEach(function(t){ t.stage = computeStage(t.species, t.age); });
+
+  var floraId = 0;
+  biomeDef.smallFlora.forEach(function(sp){
+    var count = 14 + Math.floor(rng()*8);
+    var fattempts = 0, placed = 0;
+    while (placed < count && fattempts < count*14){
+      fattempts++;
+      var fx = (rng()*2-1) * TERRAIN_HALF * 0.9;
+      var fz = (rng()*2-1) * TERRAIN_HALF * 0.9;
+      var fh = sampler.heightAt(fx,fz);
+      if (fh < -0.02 || fh > 0.28) continue;   // damp, low ground — near the waterline
+      if (Math.hypot(fx,fz) < pondR - 0.05) continue; // allowed right up to the edge, but not inside open water
+      if (sampler.slopeAt(fx,fz) > 1.8) continue;
+      var age = rng()*2;
+      entities.smallFlora.push({
+        id: 'flora'+(floraId++), species: sp, x: fx, z: fz, rot: rng()*Math.PI*2,
+        variant: 0.75+rng()*0.6, age: age, stage: computeStage(sp, age)
+      });
+      placed++;
+    }
+  });
+
+  var activeFauna = ['firefly','snail'].concat(biomeDef.fauna||[]);
+  activeFauna.forEach(function(sp){
+    for (var i=0;i<FAUNA_TARGETS[sp];i++){
+      var fx, fz;
+      if (FAUNA_STYLE[sp].kind === 'swim'){
+        var ang = rng()*Math.PI*2, rad = rng()*pondR*0.8;
+        fx = Math.cos(ang)*rad; fz = Math.sin(ang)*rad;
+      } else {
+        fx = (rng()*2-1)*TERRAIN_HALF*0.8; fz = (rng()*2-1)*TERRAIN_HALF*0.8;
+      }
+      var age = rng()*2;
+      entities[sp].push({ id: sp+i, species: sp, x: fx, z: fz, age: age, stage: computeStage(sp, age) });
+    }
+  });
+  return entities;
+}
+
+// advances a jar's entities by `days` sim-days. logs human-readable changes.
+function advanceSimulation(jar, sampler, days, rng, log){
+  if (days <= 0) return;
+  jar.totalSimDays = (jar.totalSimDays||0) + days;
+
+  var grew = 0;
+  jar.entities.trees.forEach(function(t){
+    t.age += days;
+    var ns = computeStage(t.species, t.age);
+    if (ns > t.stage) grew++;
+    t.stage = ns;
+  });
+  if (!jar.entities.smallFlora) jar.entities.smallFlora = [];
+  jar.entities.smallFlora.forEach(function(f){
+    f.age += days;
+    var ns = computeStage(f.species, f.age);
+    if (ns > f.stage) grew++;
+    f.stage = ns;
+  });
+
+  var activeFauna = ['firefly','snail'].concat((BIOMES[jar.biome]||{}).fauna || []);
+  var pondR = pondRadiusFor(jar.biome || 'coast', jar.waterBody || 'island');
+  var birthsBySpecies = {}, deathsBySpecies = {};
+  ALL_FAUNA.forEach(function(sp){
+    var list = jar.entities[sp];
+    if (!list) { jar.entities[sp] = list = []; }
+    var deaths = 0, births = 0;
+    for (var i=list.length-1;i>=0;i--){
+      list[i].age += days;
+      list[i].stage = computeStage(sp, list[i].age);
+      if (list[i].age > REGISTRY[sp].lifespanDays){ list.splice(i,1); deaths++; }
+    }
+    // only top up species this jar's biome actually supports
+    if (activeFauna.indexOf(sp) !== -1){
+      var target = FAUNA_TARGETS[sp];
+      var guard = 0;
+      while (list.length < target && guard < target*2){
+        guard++;
+        if (rng() > 0.85 && list.length > 0) break; // don't always instantly refill
+        var fx, fz;
+        if (FAUNA_STYLE[sp].kind === 'swim'){
+          var ang = rng()*Math.PI*2, rad = rng()*pondR*0.8;
+          fx = Math.cos(ang)*rad; fz = Math.sin(ang)*rad;
+        } else {
+          fx = (rng()*2-1)*TERRAIN_HALF*0.8; fz = (rng()*2-1)*TERRAIN_HALF*0.8;
+        }
+        list.push({ id: sp+'_'+Math.floor(rng()*1e9), species: sp, x: fx, z: fz, age: 0, stage: 0 });
+        births++;
+      }
+    }
+    if (deaths > 0) deathsBySpecies[sp] = (deathsBySpecies[sp]||0) + deaths;
+    if (births > 0) birthsBySpecies[sp] = (birthsBySpecies[sp]||0) + births;
+  });
+
+  if (log){
+    if (grew > 0){
+      log.push('🌱 ' + grew + (grew===1 ? ' plant grew a stage' : ' plants grew a stage'));
+    }
+    var arrivals = Object.keys(birthsBySpecies).map(function(sp){
+      return REGISTRY[sp].name + ' ×' + birthsBySpecies[sp];
+    });
+    if (arrivals.length) log.push('✨ ' + arrivals.join(', '));
+    var departures = Object.keys(deathsBySpecies).map(function(sp){
+      return REGISTRY[sp].name + ' ×' + deathsBySpecies[sp];
+    });
+    if (departures.length) log.push('🍂 ' + departures.join(', '));
+  }
+}
+
+/* =========================================================
+   JAR RECORD + INDEX
+   ========================================================= */
+var currentJar = null;      // the live record: {seed, name, createdAt, lastVisited, entities}
+var currentSampler = null;
+var jarIndex = [];          // [{seed, name, createdAt, lastVisited}]
+var discoveries = {};       // { speciesId: {firstSeen, timesSeen} }
+
+function createFreshJarRecord(seed){
+  var sampler = createTerrainSampler(seed);
+  var entities = createFreshEntities(sampler);
+  return {
+    seed: seed,
+    name: 'jar ' + seedHex(seed),
+    biome: sampler.biome,
+    waterBody: sampler.waterBody,
+    createdAt: Date.now(),
+    lastVisited: Date.now(),
+    totalSimDays: 0,
+    moonPhaseOffset: sampler.rng(), // 0..1, so fresh jars start at a random point in the lunar cycle
+    entities: entities
+  };
+}
+
+function noteDiscoveries(jar){
+  var seen = {};
+  jar.entities.trees.forEach(function(t){ seen[t.species] = true; });
+  (jar.entities.smallFlora||[]).forEach(function(f){ seen[f.species] = true; });
+  (BIOMES[jar.biome] ? BIOMES[jar.biome].features : ['stone']).forEach(function(f){ seen[f] = true; });
+  ALL_FAUNA.forEach(function(sp){ if ((jar.entities[sp]||[]).length) seen[sp] = true; });
+  var now = Date.now();
+  Object.keys(seen).forEach(function(spId){
+    if (!discoveries[spId]) discoveries[spId] = { firstSeen: now, timesSeen: 0 };
+    discoveries[spId].timesSeen += 1;
+  });
+}
+
+async function persistJar(jar){
+  jar.lastVisited = Date.now();
+  await safeSet('jar:' + seedHex(jar.seed), jar);
+  var entry = jarIndex.find(function(j){ return j.seed === jar.seed; });
+  if (entry){ entry.lastVisited = jar.lastVisited; entry.name = jar.name; }
+  await safeSet('jars:index', jarIndex);
+  await safeSet('almanac:discoveries', discoveries);
+}
+
+/* =========================================================
+   POND / TERRAIN / ROCKS  (regenerated from seed every time — deterministic)
+   ========================================================= */
+var worldGroup = new THREE.Group();
+scene.add(worldGroup);
+
+var trunkGeo = new THREE.CylinderGeometry(0.028, 0.04, 0.22, 9); trunkGeo.translate(0, 0.11, 0);
+var pineFoliageGeo = new THREE.ConeGeometry(0.16, 0.42, 11); pineFoliageGeo.translate(0, 0.22+0.18, 0);
+var brambleFoliageGeo = new THREE.IcosahedronGeometry(0.17, 1); brambleFoliageGeo.translate(0, 0.22+0.15, 0);
+var snowPineFoliageGeo = new THREE.ConeGeometry(0.15, 0.44, 11); snowPineFoliageGeo.translate(0, 0.22+0.19, 0);
+var trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 0.95, map: makeBarkTexture() });
+var leafMottleTex = makeLeafMottleTexture();
+var pineFoliageMat = new THREE.MeshStandardMaterial({ color: 0x3f6b3a, roughness: 0.85, map: leafMottleTex });
+var brambleFoliageMat = new THREE.MeshStandardMaterial({ color: 0x6d7f39, roughness: 0.85, map: leafMottleTex });
+var snowPineFoliageMat = new THREE.MeshStandardMaterial({ color: 0x6f8f7a, roughness: 0.8, map: leafMottleTex });
+
+var MAX_TREES = 46;
+var trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, MAX_TREES);
+var pineMesh = new THREE.InstancedMesh(pineFoliageGeo, pineFoliageMat, MAX_TREES);
+var brambleMesh = new THREE.InstancedMesh(brambleFoliageGeo, brambleFoliageMat, MAX_TREES);
+var snowPineMesh = new THREE.InstancedMesh(snowPineFoliageGeo, snowPineFoliageMat, MAX_TREES);
+[trunkMesh, pineMesh, brambleMesh, snowPineMesh].forEach(function(m){ m.castShadow = true; m.receiveShadow = true; m.count = 0; });
+worldGroup.add(trunkMesh, pineMesh, brambleMesh, snowPineMesh);
+
+var fernGeo = new THREE.IcosahedronGeometry(0.045, 1); fernGeo.translate(0, 0.03, 0);
+var fernMat = new THREE.MeshStandardMaterial({ color: 0x4f8a3d, roughness: 0.85 });
+var reedGeo = new THREE.CylinderGeometry(0.006, 0.011, 0.26, 5); reedGeo.translate(0, 0.13, 0);
+var reedMat = new THREE.MeshStandardMaterial({ color: 0x8a9c4a, roughness: 0.8 });
+var MAX_SMALL_FLORA = 26;
+var fernMesh = new THREE.InstancedMesh(fernGeo, fernMat, MAX_SMALL_FLORA);
+var reedMesh = new THREE.InstancedMesh(reedGeo, reedMat, MAX_SMALL_FLORA);
+[fernMesh, reedMesh].forEach(function(m){ m.castShadow = true; m.receiveShadow = true; m.count = 0; });
+worldGroup.add(fernMesh, reedMesh);
+
+var rockGeo = new THREE.DodecahedronGeometry(0.055, 1);
+var rockMat = new THREE.MeshStandardMaterial({ color: 0x8b8378, roughness: 1.0 });
+var MAX_ROCKS = 26;
+var rockMesh = new THREE.InstancedMesh(rockGeo, rockMat, MAX_ROCKS);
+rockMesh.castShadow = true; rockMesh.receiveShadow = true; rockMesh.count = 0;
+worldGroup.add(rockMesh);
+
+var driftwoodGeo = new THREE.CylinderGeometry(0.025, 0.032, 0.32, 9);
+var driftwoodMat = new THREE.MeshStandardMaterial({ color: 0x8a7458, roughness: 0.95 });
+var MAX_DRIFTWOOD = 8;
+var driftwoodMesh = new THREE.InstancedMesh(driftwoodGeo, driftwoodMat, MAX_DRIFTWOOD);
+driftwoodMesh.castShadow = true; driftwoodMesh.receiveShadow = true; driftwoodMesh.count = 0;
+worldGroup.add(driftwoodMesh);
+
+// small procedurally-styled dwelling — one per jar, anywhere from an abandoned shack to a cozy cabin
+var dwellingGroup = new THREE.Group();
+worldGroup.add(dwellingGroup);
+var dwellingSmokeOrigin = null;
+var dwellingHasSmoke = false;
+var activeSmoke = [];
+var smokeTimer = 0;
+
+function disposeDwelling(){
+  while (dwellingGroup.children.length){
+    var c = dwellingGroup.children.pop();
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) c.material.dispose();
+  }
+  activeSmoke.forEach(function(s){ scene.remove(s.sprite); s.sprite.material.dispose(); });
+  activeSmoke = [];
+  dwellingSmokeOrigin = null;
+  dwellingHasSmoke = false;
+}
+
+function buildDwelling(sampler){
+  disposeDwelling();
+
+  var dx=0, dz=0, dh=0, found=false, attempts=0;
+  while (attempts<60 && !found){
+    attempts++;
+    var tx=(sampler.rng()*2-1)*TERRAIN_HALF*0.7, tz=(sampler.rng()*2-1)*TERRAIN_HALF*0.7;
+    var th=sampler.heightAt(tx,tz);
+    if (th<0.08 || th>0.4) continue;
+    if (Math.hypot(tx,tz) < currentPondRadius + 0.3) continue;
+    if (sampler.slopeAt(tx,tz)>1.2) continue;
+    dx=tx; dz=tz; dh=th; found=true;
+  }
+  if (!found) return; // rare — just skip this jar's dwelling rather than force a bad spot
+
+  var condition = sampler.rng(); // 0 abandoned .. 1 cozy
+  var wallColor = lerpColor(new THREE.Color(0x6b6459), new THREE.Color(0x8a5a3a), condition);
+  var roofColor = lerpColor(new THREE.Color(0x4a4a42), new THREE.Color(0x7a3a2e), condition);
+  var doorColor = lerpColor(new THREE.Color(0x2a2620), new THREE.Color(0x4a2f1c), condition);
+  var windowLitAmt = Math.max(0, (condition-0.4)/0.6);
+  var windowColor = lerpColor(new THREE.Color(0x2a2c2e), new THREE.Color(0xffdca0), windowLitAmt);
+  var windowLit = condition > 0.55;
+
+  var wallGeo = new THREE.BoxGeometry(0.2, 0.15, 0.16);
+  var wallMat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.9 });
+  var wall = new THREE.Mesh(wallGeo, wallMat);
+  wall.position.y = 0.075;
+  wall.castShadow = true; wall.receiveShadow = true;
+
+  var roofGeo = new THREE.ConeGeometry(0.17, 0.13, 4);
+  var roofMat = new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.85 });
+  var roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.rotation.y = Math.PI/4;
+  roof.position.y = 0.15 + 0.065;
+  roof.rotation.z = condition < 0.35 ? (sampler.rng()*0.25-0.05) : 0; // abandoned roofs can sit askew
+  roof.castShadow = true;
+
+  var doorGeo = new THREE.PlaneGeometry(0.045, 0.09);
+  var doorMat = new THREE.MeshStandardMaterial({ color: doorColor, roughness: 0.9 });
+  var door = new THREE.Mesh(doorGeo, doorMat);
+  door.position.set(0, 0.045, 0.081);
+
+  var winGeo = new THREE.PlaneGeometry(0.04, 0.04);
+  var winMat = windowLit
+    ? new THREE.MeshBasicMaterial({ color: windowColor })
+    : new THREE.MeshStandardMaterial({ color: windowColor, roughness: 0.9 });
+  var win = new THREE.Mesh(winGeo, winMat);
+  win.position.set(0.101, 0.09, 0.02);
+  win.rotation.y = Math.PI/2;
+
+  var chimneyGeo = new THREE.BoxGeometry(0.025, 0.06, 0.025);
+  var chimney = new THREE.Mesh(chimneyGeo, roofMat);
+  chimney.position.set(0.05, 0.15+0.09, -0.02);
+
+  dwellingGroup.add(wall, roof, door, win, chimney);
+  dwellingGroup.position.set(dx, dh, dz);
+  dwellingGroup.rotation.y = sampler.rng()*Math.PI*2;
+  dwellingGroup.scale.setScalar(0.85 + sampler.rng()*0.35);
+  dwellingGroup.updateMatrixWorld(true);
+
+  if (windowLit && condition > 0.6){
+    dwellingHasSmoke = true;
+    dwellingSmokeOrigin = new THREE.Vector3();
+    chimney.getWorldPosition(dwellingSmokeOrigin);
+    dwellingSmokeOrigin.y += 0.03;
+  }
+}
+
+function stepSmoke(dt, elapsed){
+  if (dwellingHasSmoke){
+    smokeTimer -= dt;
+    if (smokeTimer <= 0){
+      smokeTimer = 1.2 + Math.random()*1.5;
+      var mat = new THREE.SpriteMaterial({ map: burstTex, color:0xcfcfd4, transparent:true, depthWrite:false, opacity:0.5 });
+      var spr = new THREE.Sprite(mat);
+      spr.scale.setScalar(0.03);
+      spr.position.copy(dwellingSmokeOrigin);
+      scene.add(spr);
+      activeSmoke.push({ sprite:spr, age:0, life:2.6, vx:(Math.random()*0.02-0.01) });
+    }
+  }
+  for (var i=activeSmoke.length-1;i>=0;i--){
+    var s = activeSmoke[i]; s.age += dt;
+    s.sprite.position.y += dt*0.05;
+    s.sprite.position.x += s.vx*dt;
+    s.sprite.scale.setScalar(0.03 + s.age*0.025);
+    s.sprite.material.opacity = Math.max(0, 0.5*(1-s.age/s.life));
+    if (s.age > s.life){
+      scene.remove(s.sprite); s.sprite.material.dispose();
+      activeSmoke.splice(i,1);
+    }
+  }
+}
+
+var pondGeo = new THREE.CircleGeometry(JAR_R*0.9, 48); pondGeo.rotateX(-Math.PI/2);
+var pondMat = new THREE.MeshStandardMaterial({ color: 0x2c5a63, roughness: 0.25, metalness: 0.05, map: makeWaterTexture() });
+var pondMesh = new THREE.Mesh(pondGeo, pondMat);
+pondMesh.position.y = WATER_Y - 0.02; pondMesh.receiveShadow = true;
+worldGroup.add(pondMesh);
+
+// grass — wind sway is animated on the CPU each frame (proven pattern already used for fauna/dust),
+// deliberately avoiding hand-written vertex shaders since there's no way to test-render them here
+var grassGeo = new THREE.PlaneGeometry(0.014, 0.09);
+grassGeo.translate(0, 0.045, 0); // pivot at the base so sway reads as bending, not floating
+(function(){
+  var col = new Float32Array(4*3);
+  var dark = new THREE.Color(0x3a5c2e), light = new THREE.Color(0x8fae52);
+  col[0]=dark.r; col[1]=dark.g; col[2]=dark.b;
+  col[3]=dark.r; col[4]=dark.g; col[5]=dark.b;
+  col[6]=light.r; col[7]=light.g; col[8]=light.b;
+  col[9]=light.r; col[10]=light.g; col[11]=light.b;
+  grassGeo.setAttribute('color', new THREE.BufferAttribute(col,3));
+})();
+var grassMat = new THREE.MeshStandardMaterial({ vertexColors:true, side:THREE.DoubleSide, roughness:0.85 });
+var MAX_GRASS = 260;
+var grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, MAX_GRASS);
+grassMesh.castShadow = false; grassMesh.receiveShadow = true; grassMesh.count = 0;
+worldGroup.add(grassMesh);
+var grassBlades = []; // {x,y,z,rotY,scale,phase} — repopulated per jar, animated every frame
+var grassDummy = new THREE.Object3D();
+
+var terrainMesh = null; // rebuilt per seed (geometry differs each time)
+var currentPondRadius = JAR_R*0.9;
+
+function rebuildStaticWorld(sampler){
+  var pal = BIOMES[sampler.biome].palette;
+
+  // pond scales with biome character — coastlines run wetter, highlands run drier
+  var pondR = pondRadiusFor(sampler.biome, sampler.waterBody);
+  currentPondRadius = pondR;
+  rebuildOverflow();
+  pondMesh.scale.setScalar(pondR / (JAR_R*0.9));
+
+  // terrain
+  if (terrainMesh){ worldGroup.remove(terrainMesh); terrainMesh.geometry.dispose(); terrainMesh.material.dispose(); }
+  var segs = 56;
+  var terrainGeo = new THREE.PlaneGeometry(TERRAIN_HALF*2, TERRAIN_HALF*2, segs, segs);
+  var posAttr = terrainGeo.attributes.position;
+  var colorArr = new Float32Array(posAttr.count*3);
+  var SAND = new THREE.Color(pal.sand), GRASS_A = new THREE.Color(pal.grassA),
+      GRASS_B = new THREE.Color(pal.grassB), ROCK = new THREE.Color(pal.rock),
+      SNOW = new THREE.Color(pal.snow);
+  var rockBoost = BIOMES[sampler.biome].rockBoost;
+  var sandTop = 0.02, grassTop = 0.5-rockBoost, rockTop = 0.8-rockBoost;
+  for (var i=0;i<posAttr.count;i++){
+    var x = posAttr.getX(i), y = posAttr.getY(i);
+    var wz = -y; // this plane gets rotateX(-90deg) below, which maps local y -> world -z;
+                 // negate here so heightAt(x, wz) matches world (x, z) everywhere else in the code
+    var h = sampler.heightAt(x,wz);
+    posAttr.setZ(i, h);
+    var patch = fbm(sampler.noise2D, x*2.3+sampler.ox+50, wz*2.3+sampler.oz+50, 3)*0.5+0.5;
+    var grassCol = lerpColor(GRASS_A, GRASS_B, patch);
+    // smooth cross-fades between zones instead of hard bands
+    var col = SAND;
+    col = lerpColor(col, grassCol, smoothstep(sandTop-0.025, sandTop+0.03, h));
+    col = lerpColor(col, ROCK, smoothstep(grassTop-0.05, grassTop+0.05, h));
+    col = lerpColor(col, SNOW, smoothstep(rockTop-0.05, rockTop+0.05, h));
+    // fine, high-frequency detail mottling so ground doesn't read as flat color
+    var fine = fbm(sampler.noise2D, x*9+sampler.ox+120, wz*9+sampler.oz+120, 2)*0.5+0.5;
+    var detail = 0.9 + fine*0.2;
+    colorArr[i*3]=col.r*detail; colorArr[i*3+1]=col.g*detail; colorArr[i*3+2]=col.b*detail;
+  }
+  terrainGeo.setAttribute('color', new THREE.BufferAttribute(colorArr,3));
+  terrainGeo.computeVertexNormals();
+  terrainGeo.rotateX(-Math.PI/2);
+  terrainGeo.computeVertexNormals();
+  var terrainMat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.92, metalness:0.0 });
+  terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+  terrainMesh.receiveShadow = true;
+  terrainMesh.name = 'terrain';
+  worldGroup.add(terrainMesh);
+
+  // rocks — deterministic from the same rng sequence every time (not persisted, doesn't need to be)
+  var dummy = new THREE.Object3D();
+  var rockCount = 0, rattempts = 0;
+  while (rockCount < MAX_ROCKS && rattempts < MAX_ROCKS*14){
+    rattempts++;
+    var rx = (sampler.rng()*2-1) * TERRAIN_HALF * 0.95;
+    var rz = (sampler.rng()*2-1) * TERRAIN_HALF * 0.95;
+    var rh = sampler.heightAt(rx,rz);
+    if (rh < 0.0) continue;
+    if (Math.hypot(rx,rz) < pondR - 0.02) continue;
+    dummy.position.set(rx, rh+0.02, rz);
+    dummy.rotation.set(sampler.rng()*Math.PI, sampler.rng()*Math.PI, sampler.rng()*Math.PI);
+    dummy.scale.setScalar(0.6+sampler.rng()*1.3);
+    dummy.updateMatrix();
+    rockMesh.setMatrixAt(rockCount, dummy.matrix);
+    rockCount++;
+  }
+  rockMesh.count = rockCount;
+  rockMesh.instanceMatrix.needsUpdate = true;
+
+  // driftwood — coastal-only feature, scattered right at the waterline, same deterministic pattern as rocks
+  var driftCount = 0;
+  if (BIOMES[sampler.biome].features.indexOf('driftwood') !== -1){
+    var dattempts = 0;
+    while (driftCount < MAX_DRIFTWOOD && dattempts < MAX_DRIFTWOOD*14){
+      dattempts++;
+      var dx = (sampler.rng()*2-1) * TERRAIN_HALF * 0.95;
+      var dz = (sampler.rng()*2-1) * TERRAIN_HALF * 0.95;
+      var dh = sampler.heightAt(dx,dz);
+      if (dh < -0.03 || dh > 0.08) continue;
+      if (Math.abs(Math.hypot(dx,dz) - pondR) > 0.35) continue; // must actually be near the water's edge, not just at a "low enough" height
+      dummy.position.set(dx, dh+0.02, dz);
+      dummy.rotation.set(Math.PI/2, sampler.rng()*Math.PI*2, sampler.rng()*0.3);
+      dummy.scale.setScalar(0.7+sampler.rng()*0.9);
+      dummy.updateMatrix();
+      driftwoodMesh.setMatrixAt(driftCount, dummy.matrix);
+      driftCount++;
+    }
+  }
+  driftwoodMesh.count = driftCount;
+  driftwoodMesh.instanceMatrix.needsUpdate = true;
+
+  // grass — deterministic scatter like rocks; wind sway is animated separately, per frame
+  grassBlades = [];
+  var grassDensity = Math.min(BIOMES[sampler.biome].grassDensity || 150, MAX_GRASS);
+  var gAttempts = 0;
+  while (grassBlades.length < grassDensity && gAttempts < grassDensity*6){
+    gAttempts++;
+    var gx = (sampler.rng()*2-1) * TERRAIN_HALF * 0.92;
+    var gz = (sampler.rng()*2-1) * TERRAIN_HALF * 0.92;
+    var gh = sampler.heightAt(gx,gz);
+    if (gh < 0.03 || gh > 0.42) continue;
+    if (Math.hypot(gx,gz) < pondR + 0.03) continue;
+    if (sampler.slopeAt(gx,gz) > 1.5) continue;
+    grassBlades.push({ x:gx, y:gh, z:gz, rotY: sampler.rng()*Math.PI*2, scale: 0.7+sampler.rng()*0.8, phase: sampler.rng()*Math.PI*2 });
+  }
+  grassMesh.count = grassBlades.length;
+  grassBlades.forEach(function(b, gi){
+    grassDummy.position.set(b.x, b.y, b.z);
+    grassDummy.rotation.set(0, b.rotY, 0);
+    grassDummy.scale.setScalar(b.scale);
+    grassDummy.updateMatrix();
+    grassMesh.setMatrixAt(gi, grassDummy.matrix);
+  });
+  grassMesh.instanceMatrix.needsUpdate = true;
+
+  buildDwelling(sampler);
+}
+
+function refreshTreeInstances(jar, sampler){
+  var dummy = new THREE.Object3D();
+  var trunkIdx=0, pineIdx=0, brambleIdx=0, snowPineIdx=0;
+  jar.entities.trees.forEach(function(t){
+    var def = REGISTRY[t.species];
+    var stage = def.stages[t.stage];
+    var y = sampler.heightAt(t.x, t.z);
+    dummy.position.set(t.x, y, t.z);
+    dummy.rotation.set(0, t.rot, 0);
+    dummy.scale.setScalar(stage.scale * t.variant);
+    dummy.updateMatrix();
+    trunkMesh.setMatrixAt(trunkIdx++, dummy.matrix);
+    if (t.species === 'tree_pine') pineMesh.setMatrixAt(pineIdx++, dummy.matrix);
+    else if (t.species === 'tree_snow_pine') snowPineMesh.setMatrixAt(snowPineIdx++, dummy.matrix);
+    else brambleMesh.setMatrixAt(brambleIdx++, dummy.matrix);
+  });
+  trunkMesh.count = trunkIdx; pineMesh.count = pineIdx; brambleMesh.count = brambleIdx; snowPineMesh.count = snowPineIdx;
+  trunkMesh.instanceMatrix.needsUpdate = true;
+  pineMesh.instanceMatrix.needsUpdate = true;
+  brambleMesh.instanceMatrix.needsUpdate = true;
+  snowPineMesh.instanceMatrix.needsUpdate = true;
+}
+
+function refreshSmallFloraInstances(jar, sampler){
+  var dummy = new THREE.Object3D();
+  var fernIdx = 0, reedIdx = 0;
+  (jar.entities.smallFlora||[]).forEach(function(f){
+    var def = REGISTRY[f.species];
+    var stage = def.stages[f.stage];
+    var y = sampler.heightAt(f.x, f.z);
+    dummy.position.set(f.x, y, f.z);
+    dummy.rotation.set(0, f.rot, 0);
+    dummy.scale.setScalar(stage.scale * f.variant);
+    dummy.updateMatrix();
+    if (f.species === 'fern') fernMesh.setMatrixAt(fernIdx++, dummy.matrix);
+    else if (f.species === 'reed') reedMesh.setMatrixAt(reedIdx++, dummy.matrix);
+  });
+  fernMesh.count = fernIdx; reedMesh.count = reedIdx;
+  fernMesh.instanceMatrix.needsUpdate = true;
+  reedMesh.instanceMatrix.needsUpdate = true;
+}
+
+/* =========================================================
+   FAUNA VISUALS (individual objects — counts are small)
+   ========================================================= */
+var faunaVisuals = {};
+ALL_FAUNA.forEach(function(sp){ faunaVisuals[sp] = new Map(); }); // id -> {obj, vx, vz, wanderT, phase}
+
+function createFireflyVisual(){
+  var mat = new THREE.SpriteMaterial({ map: fireflyTex, color: 0xd6ffbe, transparent:true, depthWrite:false, blending: THREE.AdditiveBlending, opacity: 0.9 });
+  var spr = new THREE.Sprite(mat);
+  spr.scale.setScalar(0.09);
+  return spr;
+}
+
+var tinyEyeGeo = new THREE.SphereGeometry(0.006, 8, 6);
+var tinyEyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.25 });
+var thinLimbGeo = new THREE.CylinderGeometry(0.0025, 0.0035, 0.026, 5);
+
+var snailShellGeo = new THREE.SphereGeometry(0.045, 12, 9);
+var snailBodyGeo = new THREE.SphereGeometry(0.03, 10, 8);
+var snailShellMat = new THREE.MeshStandardMaterial({ color: 0xa8783f, roughness: 0.7 });
+var snailBodyMat = new THREE.MeshStandardMaterial({ color: 0x6b7d55, roughness: 0.6 });
+function createSnailVisual(){
+  var g = new THREE.Group();
+  var shell = new THREE.Mesh(snailShellGeo, snailShellMat);
+  shell.position.set(0, 0.035, -0.01); shell.scale.set(1,0.75,1);
+  var body = new THREE.Mesh(snailBodyGeo, snailBodyMat);
+  body.position.set(0, 0.02, 0.03); body.scale.set(1.4,0.6,1);
+  g.add(shell, body);
+  [-1,1].forEach(function(side){
+    var stalk = new THREE.Mesh(thinLimbGeo, snailBodyMat);
+    stalk.scale.set(0.6,0.9,0.6);
+    stalk.position.set(side*0.012, 0.038, 0.06);
+    stalk.rotation.z = side*0.5;
+    var eye = new THREE.Mesh(tinyEyeGeo, tinyEyeMat);
+    eye.position.set(side*0.017, 0.05, 0.066);
+    g.add(stalk, eye);
+  });
+  g.traverse(function(o){ o.castShadow = true; o.receiveShadow = true; });
+  return g;
+}
+
+var frogBodyGeo = new THREE.SphereGeometry(0.045, 12, 9);
+var frogHeadGeo = new THREE.SphereGeometry(0.026, 10, 8);
+var frogMat = new THREE.MeshStandardMaterial({ color: 0x5a8f4a, roughness: 0.6 });
+function createFrogVisual(){
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(frogBodyGeo, frogMat); body.scale.set(1,0.6,1.25);
+  var head = new THREE.Mesh(frogHeadGeo, frogMat); head.position.set(0,0.018,0.038); head.scale.set(1,0.85,1);
+  g.add(body, head);
+  [-1,1].forEach(function(side){
+    var eye = new THREE.Mesh(tinyEyeGeo, tinyEyeMat);
+    eye.scale.setScalar(1.4);
+    eye.position.set(side*0.016, 0.035, 0.045);
+    g.add(eye);
+  });
+  [[-0.035,-0.01,0.02],[0.035,-0.01,0.02],[-0.032,-0.01,-0.025],[0.032,-0.01,-0.025]].forEach(function(p){
+    var leg = new THREE.Mesh(thinLimbGeo, frogMat);
+    leg.scale.set(0.9,0.55,0.9);
+    leg.position.set(p[0],p[1],p[2]);
+    leg.rotation.z = (p[0]<0?1:-1) * Math.PI/2 * 0.35;
+    g.add(leg);
+  });
+  g.traverse(function(o){ o.castShadow = true; o.receiveShadow = true; });
+  return g;
+}
+
+var fishBodyGeo = new THREE.SphereGeometry(0.042, 12, 9);
+var fishTailGeo = new THREE.ConeGeometry(0.02, 0.03, 4);
+var fishFinGeo = new THREE.ConeGeometry(0.014, 0.022, 3);
+var fishMat = new THREE.MeshStandardMaterial({ color: 0x6f93b0, roughness: 0.45, metalness: 0.15 });
+function createFishVisual(){
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(fishBodyGeo, fishMat); body.scale.set(1.7,0.55,0.7);
+  var tail = new THREE.Mesh(fishTailGeo, fishMat);
+  tail.position.set(-0.055,0,0); tail.rotation.z = Math.PI/2;
+  var fin = new THREE.Mesh(fishFinGeo, fishMat);
+  fin.position.set(0.005, 0.026, 0); fin.rotation.x = Math.PI; fin.scale.set(1,1,0.4);
+  var eye = new THREE.Mesh(tinyEyeGeo, tinyEyeMat);
+  eye.position.set(0.035, 0.006, 0.02);
+  g.add(body, tail, fin, eye);
+  return g;
+}
+
+var dragonflyBodyGeo = new THREE.CylinderGeometry(0.004, 0.006, 0.05, 6);
+var dragonflyHeadGeo = new THREE.SphereGeometry(0.0055, 8, 6);
+var dragonflyWingGeo = new THREE.PlaneGeometry(0.045, 0.012);
+var dragonflyBodyMat = new THREE.MeshStandardMaterial({ color: 0x3f7a94, roughness: 0.4, metalness: 0.2 });
+var dragonflyWingMat = new THREE.MeshStandardMaterial({ color: 0xcfe8f0, transparent:true, opacity:0.45, roughness:0.3, side: THREE.DoubleSide });
+function createDragonflyVisual(){
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(dragonflyBodyGeo, dragonflyBodyMat);
+  body.rotation.z = Math.PI/2;
+  var head = new THREE.Mesh(dragonflyHeadGeo, tinyEyeMat);
+  head.position.set(0.026, 0, 0);
+  var wingL = new THREE.Mesh(dragonflyWingGeo, dragonflyWingMat);
+  wingL.position.set(0, 0.006, 0.014); wingL.rotation.x = -Math.PI/2.3;
+  var wingR = wingL.clone();
+  wingR.position.z = -0.014; wingR.rotation.x = Math.PI/2.3;
+  g.add(body, head, wingL, wingR);
+  return g;
+}
+
+var beetleGeo = new THREE.SphereGeometry(0.032, 12, 9);
+var beetleHeadGeo = new THREE.SphereGeometry(0.018, 10, 8);
+var beetleMat = new THREE.MeshStandardMaterial({ color: 0x2b2620, roughness: 0.35, metalness: 0.1 });
+function createBeetleVisual(){
+  var g = new THREE.Group();
+  var abdomen = new THREE.Mesh(beetleGeo, beetleMat);
+  abdomen.scale.set(1.2,0.7,1); abdomen.position.set(0,0,-0.008);
+  var head = new THREE.Mesh(beetleHeadGeo, beetleMat);
+  head.scale.set(1,0.75,0.9); head.position.set(0,0.004,0.026);
+  g.add(abdomen, head);
+  [-1,1].forEach(function(side){
+    var ant = new THREE.Mesh(thinLimbGeo, beetleMat);
+    ant.scale.set(0.5,0.7,0.5);
+    ant.position.set(side*0.008,0.014,0.038);
+    ant.rotation.z = side*0.5; ant.rotation.x = -0.3;
+    g.add(ant);
+  });
+  [-0.026,0.026].forEach(function(lx){
+    [0.012,-0.004,-0.018].forEach(function(lz){
+      var leg = new THREE.Mesh(thinLimbGeo, beetleMat);
+      leg.scale.set(0.6,0.55,0.6);
+      leg.position.set(lx,-0.006,lz);
+      leg.rotation.z = (lx<0?1:-1) * Math.PI/2 * 0.6;
+      g.add(leg);
+    });
+  });
+  g.traverse(function(o){ o.castShadow = true; o.receiveShadow = true; });
+  return g;
+}
+
+var VISUAL_FACTORY = {
+  firefly: createFireflyVisual, snail: createSnailVisual, frog: createFrogVisual,
+  fish: createFishVisual, dragonfly: createDragonflyVisual, beetle: createBeetleVisual
+};
+
+function faunaHeightFor(sp, e, sampler, phase, elapsed){
+  var style = FAUNA_STYLE[sp];
+  if (style.kind === 'swim') return (WATER_Y - 0.02) - 0.006 + 0.004*Math.sin((elapsed||0)*1.4+phase);
+  if (style.kind === 'fly') return sampler.heightAt(e.x,e.z) + 0.35 + 0.2*Math.sin((elapsed!==undefined?elapsed:phase)*2+phase);
+  return sampler.heightAt(e.x,e.z) + 0.015;
+}
+
+function refreshFaunaVisuals(jar, sampler){
+  ALL_FAUNA.forEach(function(sp){
+    var map = faunaVisuals[sp];
+    var liveIds = {};
+    (jar.entities[sp]||[]).forEach(function(e){
+      liveIds[e.id] = true;
+      var rec = map.get(e.id);
+      if (!rec){
+        var obj = VISUAL_FACTORY[sp]();
+        scene.add(obj);
+        rec = { obj: obj, vx:0, vz:0, wanderT: Math.random()*3, phase: Math.random()*Math.PI*2 };
+        map.set(e.id, rec);
+      }
+      var stageScale = REGISTRY[sp].stages[e.stage].scale;
+      var baseScale = FAUNA_STYLE[sp].baseScale || 1;
+      var y = faunaHeightFor(sp, e, sampler, rec.phase, rec.phase);
+      rec.obj.position.set(e.x, y, e.z);
+      rec.obj.scale.setScalar(baseScale * stageScale);
+    });
+    map.forEach(function(rec, id){
+      if (!liveIds[id]){ scene.remove(rec.obj); map.delete(id); }
+    });
+  });
+}
+
+function stepFrogHop(rec, e, dt){
+  if (rec.hopState === undefined){ rec.hopState = 'rest'; rec.hopT = 0.6+Math.random()*1.8; rec.vx=0; rec.vz=0; rec.hopArc=0; }
+  if (rec.hopState === 'rest'){
+    rec.hopT -= dt;
+    rec.vx *= 0.8; rec.vz *= 0.8;
+    rec.hopArc = 0;
+    if (rec.hopT <= 0){
+      rec.hopState = 'hop';
+      var ang = Math.random()*Math.PI*2;
+      rec.hopDirX = Math.cos(ang); rec.hopDirZ = Math.sin(ang);
+      rec.hopDist = 0.06 + Math.random()*0.11;
+      rec.hopDur = 0.28 + Math.random()*0.14;
+      rec.hopProgress = 0;
+    }
+  } else {
+    rec.hopProgress += dt;
+    var t = Math.min(1, rec.hopProgress/rec.hopDur);
+    var spd = rec.hopDist/rec.hopDur;
+    e.x += rec.hopDirX*spd*dt;
+    e.z += rec.hopDirZ*spd*dt;
+    rec.vx = rec.hopDirX*spd; rec.vz = rec.hopDirZ*spd;
+    rec.hopArc = Math.sin(t*Math.PI) * 0.045;
+    if (t >= 1){
+      rec.hopState = 'rest';
+      rec.hopT = 0.7 + Math.random()*2.4;
+      rec.vx = 0; rec.vz = 0;
+    }
+  }
+}
+
+function stepFaunaWander(jar, sampler, dt, elapsed){
+  ALL_FAUNA.forEach(function(sp){
+    var style = FAUNA_STYLE[sp];
+    (jar.entities[sp]||[]).forEach(function(e){
+      var rec = faunaVisuals[sp].get(e.id);
+      if (!rec) return;
+
+      if (style.pattern === 'hop'){
+        stepFrogHop(rec, e, dt);
+      } else {
+        rec.wanderT -= dt;
+        if (rec.wanderT <= 0){
+          rec.vx += (Math.random()*2-1)*style.speed*style.kick;
+          rec.vz += (Math.random()*2-1)*style.speed*style.kick;
+          rec.wanderT = style.turnMin + Math.random()*(style.turnMax-style.turnMin);
+        }
+        rec.vx *= style.damping; rec.vz *= style.damping;
+        e.x += rec.vx*dt; e.z += rec.vz*dt;
+      }
+
+      var bound = style.kind === 'swim' ? currentPondRadius*0.8 : TERRAIN_HALF*0.85;
+      var d = Math.hypot(e.x, e.z);
+      if (d > bound){
+        e.x *= bound/d; e.z *= bound/d;
+        if (style.pattern !== 'hop'){ rec.vx *= -0.4; rec.vz *= -0.4; }
+      }
+
+      var y = faunaHeightFor(sp, e, sampler, rec.phase, elapsed) + (rec.hopArc||0);
+      rec.obj.position.set(e.x, y, e.z);
+      if (sp !== 'firefly' && (Math.abs(rec.vx)+Math.abs(rec.vz) > 0.001)){
+        rec.obj.rotation.y = Math.atan2(rec.vx, rec.vz);
+      }
+      if (style.glow) rec.obj.material.opacity = 0.55 + 0.4*Math.sin(elapsed*2.2+rec.phase);
+    });
+  });
+}
+
+/* =========================================================
+   GLASS JAR (built once)
+   ========================================================= */
+var jarGroup = new THREE.Group(); scene.add(jarGroup);
+var envCanvas = document.createElement('canvas'); envCanvas.width = 4; envCanvas.height = 128;
+var envCtx = envCanvas.getContext('2d');
+var envGrad = envCtx.createLinearGradient(0,0,0,128);
+envGrad.addColorStop(0, '#dff1ff'); envGrad.addColorStop(0.5, '#8fa6bd'); envGrad.addColorStop(1, '#1c1e28');
+envCtx.fillStyle = envGrad; envCtx.fillRect(0,0,4,128);
+var envTex = new THREE.CanvasTexture(envCanvas);
+envTex.mapping = THREE.EquirectangularReflectionMapping;
+pondMat.envMap = envTex; pondMat.envMapIntensity = 0.55; pondMat.needsUpdate = true;
+
+var glassMat = new THREE.MeshPhysicalMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.16, roughness: 0.06, metalness: 0.0, envMap: envTex, envMapIntensity: 1.3, side: THREE.DoubleSide, depthWrite: false });
+var glassMatInner = new THREE.MeshPhysicalMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.09, roughness: 0.1, metalness: 0.0, envMap: envTex, envMapIntensity: 0.8, side: THREE.BackSide, depthWrite: false });
+
+var jarBody = new THREE.CylinderGeometry(JAR_R, JAR_R, JAR_WALL_H, 40, 1, true);
+var jarBodyMesh = new THREE.Mesh(jarBody, glassMat); jarBodyMesh.position.y = JAR_WALL_H/2;
+var jarBodyMeshInner = new THREE.Mesh(jarBody, glassMatInner); jarBodyMeshInner.position.y = JAR_WALL_H/2;
+var domeGeo = new THREE.SphereGeometry(JAR_R, 40, 20, 0, Math.PI*2, 0, Math.PI/2);
+var domeMesh = new THREE.Mesh(domeGeo, glassMat); domeMesh.position.y = JAR_WALL_H;
+var domeMeshInner = new THREE.Mesh(domeGeo, glassMatInner); domeMeshInner.position.y = JAR_WALL_H;
+jarGroup.add(jarBodyMeshInner, jarBodyMesh, domeMeshInner, domeMesh);
+
+var baseGeo = new THREE.CylinderGeometry(JAR_R*1.2, JAR_R*1.32, 0.32, 32);
+var baseMat = new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 0.8 });
+var baseMesh = new THREE.Mesh(baseGeo, baseMat); baseMesh.position.y = -0.16; baseMesh.receiveShadow = true;
+scene.add(baseMesh);
+
+var rimGeo = new THREE.TorusGeometry(JAR_R, 0.03, 10, 40);
+var rimMat = new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.4, metalness: 0.6 });
+var rimMesh = new THREE.Mesh(rimGeo, rimMat); rimMesh.rotation.x = Math.PI/2; rimMesh.position.y = 0.01;
+scene.add(rimMesh);
+
+/* =========================================================
+   LIGHTING / DAY-NIGHT (unchanged simple version — sky overhaul is a later pass)
+   ========================================================= */
+var hemi = new THREE.HemisphereLight(0xbcd6e8, 0x35301f, 0.55); scene.add(hemi);
+var sun = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.left = -2.2; sun.shadow.camera.right = 2.2;
+sun.shadow.camera.top = 2.2; sun.shadow.camera.bottom = -2.2;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 14;
+sun.shadow.bias = -0.0015;
+sun.target.position.set(0, 0.4, 0);
+scene.add(sun, sun.target);
+
+var sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffe6b8, transparent:true, depthWrite:false, blending: THREE.AdditiveBlending, fog:false }));
+sunGlow.scale.setScalar(22);
+scene.add(sunGlow);
+
+/* -- the sky is projected far outside the jar: the glass becomes a window onto it,
+      not a tiny dome sitting on the terrain -- */
+var SKY_CENTER = new THREE.Vector3(0, 1.0, 0);
+var SKY_RADIUS = 16;
+var MOON_PERIOD_DAYS = 29.5;
+
+// gradient sky backdrop (blue by day, dark and starry by night, warm at the horizon during transitions)
+var skyDomeGeo = new THREE.SphereGeometry(SKY_RADIUS*1.15, 24, 16);
+var skyDomeColors = new Float32Array(skyDomeGeo.attributes.position.count*3);
+var skyDomeT = new Float32Array(skyDomeGeo.attributes.position.count);
+(function(){
+  var posAttr = skyDomeGeo.attributes.position;
+  var minY=Infinity, maxY=-Infinity;
+  for (var i=0;i<posAttr.count;i++){ var y=posAttr.getY(i); if (y<minY) minY=y; if (y>maxY) maxY=y; }
+  for (var i=0;i<posAttr.count;i++){ skyDomeT[i] = (posAttr.getY(i)-minY)/(maxY-minY); }
+})();
+skyDomeGeo.setAttribute('color', new THREE.BufferAttribute(skyDomeColors,3));
+var skyDomeMat = new THREE.MeshBasicMaterial({ vertexColors:true, side:THREE.BackSide, fog:false, depthWrite:false });
+var skyDome = new THREE.Mesh(skyDomeGeo, skyDomeMat);
+skyDome.renderOrder = -10;
+scene.add(skyDome);
+var SKY_TOP_DAY = new THREE.Color(0x5fa8dd), SKY_HORIZON_DAY = new THREE.Color(0xcfe9f5);
+var SKY_TOP_NIGHT = new THREE.Color(0x03050c), SKY_HORIZON_NIGHT = new THREE.Color(0x0c1220);
+var SKY_HORIZON_WARM = new THREE.Color(0xf2a56a);
+
+var sunDiscGeo = new THREE.SphereGeometry(1.5, 20, 14);
+var sunDiscMat = new THREE.MeshBasicMaterial({ color: 0xfffaf0, fog:false });
+var sunDisc = new THREE.Mesh(sunDiscGeo, sunDiscMat);
+scene.add(sunDisc);
+
+var moonCanvas = document.createElement('canvas'); moonCanvas.width = moonCanvas.height = 64;
+var moonCtx = moonCanvas.getContext('2d');
+var moonTex = new THREE.CanvasTexture(moonCanvas);
+var lastMoonPhaseDrawn = -1;
+function updateMoonTexture(phase){
+  var R = 27, cx = 32, cy = 32;
+  var theta = phase*Math.PI*2;
+  var k = (1-Math.cos(theta))/2;           // 0 at new, 1 at full
+  var dir = (phase < 0.5) ? 1 : -1;
+  var offsetX = dir * 2 * R * k;
+  moonCtx.clearRect(0,0,64,64);
+  moonCtx.save();
+  moonCtx.beginPath(); moonCtx.arc(cx,cy,R,0,Math.PI*2); moonCtx.closePath();
+  moonCtx.fillStyle = '#e9e6da'; moonCtx.fill();
+  moonCtx.globalCompositeOperation = 'source-atop';
+  moonCtx.beginPath(); moonCtx.arc(cx+offsetX,cy,R,0,Math.PI*2); moonCtx.closePath();
+  moonCtx.fillStyle = 'rgba(18,18,26,0.94)'; moonCtx.fill();
+  moonCtx.restore();
+  moonTex.needsUpdate = true;
+}
+updateMoonTexture(0);
+var moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xaecbe8, transparent:true, depthWrite:false, blending: THREE.AdditiveBlending, fog:false, opacity:0.22 }));
+moonGlow.scale.setScalar(8);
+scene.add(moonGlow);
+var moonSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent:true, depthWrite:false, fog:false }));
+moonSprite.scale.setScalar(3.4);
+scene.add(moonSprite);
+
+var STAR_COUNT = 480;
+var starGeo = new THREE.BufferGeometry();
+var starPos = new Float32Array(STAR_COUNT*3);
+var starColArr = new Float32Array(STAR_COUNT*3);
+var starBaseCol = new Float32Array(STAR_COUNT*3);
+var starPhase = new Float32Array(STAR_COUNT);
+for (var si=0; si<STAR_COUNT; si++){
+  var dir3;
+  do {
+    var u = Math.random()*2-1, phi = Math.random()*Math.PI*2, rr = Math.sqrt(1-u*u);
+    dir3 = new THREE.Vector3(rr*Math.cos(phi), u, rr*Math.sin(phi));
+  } while (dir3.y < -0.25);
+  var rad = SKY_RADIUS * (0.985 + Math.random()*0.02);
+  starPos[si*3] = dir3.x*rad; starPos[si*3+1] = dir3.y*rad; starPos[si*3+2] = dir3.z*rad;
+  var bcol = 0.5 + Math.random()*0.5, tint = 0.85 + Math.random()*0.15;
+  starBaseCol[si*3] = bcol; starBaseCol[si*3+1] = bcol*tint; starBaseCol[si*3+2] = bcol;
+  starColArr[si*3] = bcol; starColArr[si*3+1] = bcol*tint; starColArr[si*3+2] = bcol;
+  starPhase[si] = Math.random()*Math.PI*2;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos,3));
+starGeo.setAttribute('color', new THREE.BufferAttribute(starColArr,3));
+var starMat = new THREE.PointsMaterial({ size: 2.2, vertexColors:true, transparent:true, depthWrite:false, sizeAttenuation:false, fog:false, opacity:0 });
+var starField = new THREE.Points(starGeo, starMat);
+starField.position.copy(SKY_CENTER);
+scene.add(starField);
+
+// a couple of background "planets" — bigger, tinted points sharing the star field's night-only visibility
+var PLANET_COUNT = 3;
+var planetGeo = new THREE.BufferGeometry();
+var planetPos = new Float32Array(PLANET_COUNT*3);
+var planetColArr = new Float32Array(PLANET_COUNT*3);
+var planetTints = [[0.85,0.55,0.4],[0.85,0.78,0.55],[0.55,0.7,0.85]];
+for (var pi=0; pi<PLANET_COUNT; pi++){
+  var pu = Math.random()*0.7-0.1, pphi = Math.random()*Math.PI*2, prr = Math.sqrt(Math.max(0,1-pu*pu));
+  var pdir = new THREE.Vector3(prr*Math.cos(pphi), pu, prr*Math.sin(pphi));
+  var prad = SKY_RADIUS*0.99;
+  planetPos[pi*3]=pdir.x*prad; planetPos[pi*3+1]=pdir.y*prad; planetPos[pi*3+2]=pdir.z*prad;
+  planetColArr[pi*3]=planetTints[pi][0]; planetColArr[pi*3+1]=planetTints[pi][1]; planetColArr[pi*3+2]=planetTints[pi][2];
+}
+planetGeo.setAttribute('position', new THREE.BufferAttribute(planetPos,3));
+planetGeo.setAttribute('color', new THREE.BufferAttribute(planetColArr,3));
+var planetMat = new THREE.PointsMaterial({ size: 5.5, vertexColors:true, transparent:true, depthWrite:false, sizeAttenuation:false, fog:false, opacity:0 });
+var planetField = new THREE.Points(planetGeo, planetMat);
+planetField.position.copy(SKY_CENTER);
+scene.add(planetField);
+
+// daytime clouds — soft flat puffs drifting slowly around the sky, visible only while the sun is up
+var cloudTex = makeRadialTexture('rgba(255,255,255,0.85)', 'rgba(255,255,255,0)', 128);
+var CLOUD_COUNT = 9;
+var cloudGroup = new THREE.Group();
+var cloudSprites = [];
+for (var ci=0; ci<CLOUD_COUNT; ci++){
+  var cu = 0.15 + Math.random()*0.55, cphi = Math.random()*Math.PI*2, crr = Math.sqrt(1-cu*cu);
+  var cdir = new THREE.Vector3(crr*Math.cos(cphi), cu, crr*Math.sin(cphi));
+  var mat = new THREE.SpriteMaterial({ map: cloudTex, color:0xffffff, transparent:true, depthWrite:false, fog:false, opacity:0 });
+  var spr = new THREE.Sprite(mat);
+  var s = 3.5 + Math.random()*2.2;
+  spr.scale.set(s*1.6, s*0.7, 1);
+  spr.position.copy(cdir.multiplyScalar(SKY_RADIUS*0.97));
+  cloudSprites.push({ sprite: spr, baseOpacity: 0.55+Math.random()*0.3 });
+  cloudGroup.add(spr);
+}
+cloudGroup.position.copy(SKY_CENTER);
+scene.add(cloudGroup);
+
+var moteCount = 220;
+var moteGeo = new THREE.BufferGeometry();
+var motePos = new Float32Array(moteCount*3);
+var moteSpeed = new Float32Array(moteCount);
+var motePhase = new Float32Array(moteCount);
+for (var m=0;m<moteCount;m++){
+  motePos[m*3] = (Math.random()*2-1)*JAR_R*0.75;
+  motePos[m*3+1] = Math.random()*JAR_WALL_H*1.4;
+  motePos[m*3+2] = (Math.random()*2-1)*JAR_R*0.75;
+  moteSpeed[m] = 0.04 + Math.random()*0.08;
+  motePhase[m] = Math.random()*Math.PI*2;
+}
+moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+var moteMat = new THREE.PointsMaterial({ size: 0.028, map: burstTex, transparent:true, depthWrite:false, blending: THREE.AdditiveBlending, color: 0xfff0d2, opacity: 0.55 });
+var motes = new THREE.Points(moteGeo, moteMat);
+scene.add(motes);
+
+var COL_NIGHT = new THREE.Color(0x3a4d78), COL_SUNRISE = new THREE.Color(0xffb877),
+    COL_NOON = new THREE.Color(0xfff3d6), COL_SUNSET = new THREE.Color(0xff7a4d);
+var FOG_NIGHT = new THREE.Color(0x0a0d17), FOG_DAY = new THREE.Color(0x2c3340);
+scene.fog = new THREE.FogExp2(0x121017, 0.05);
+
+function updateDayNight(elapsed){
+  var phase = (elapsed % CYCLE) / CYCLE;
+  var angle = phase * Math.PI * 2;
+  var elev = Math.sin(angle);
+  var dayFactor = Math.max(0, elev);
+  var dir = new THREE.Vector3(Math.cos(angle), elev, 0.5*Math.sin(angle*0.6+1.2)).normalize();
+  sun.position.copy(dir).multiplyScalar(9).add(new THREE.Vector3(0,0.4,0));
+  var horizonFactor = 1 - Math.min(1, Math.abs(elev)*1.7);
+  var col;
+  if (elev < 0) col = COL_NIGHT.clone().lerp(COL_SUNRISE, Math.max(0, horizonFactor*0.6));
+  else if (phase < 0.5) col = COL_SUNRISE.clone().lerp(COL_NOON, smoothstep(0,0.5,dayFactor));
+  else col = COL_NOON.clone().lerp(COL_SUNSET, 1-smoothstep(0,0.5,dayFactor));
+  sun.color.copy(col);
+  sun.intensity = 0.12 + dayFactor*1.25;
+  hemi.intensity = 0.18 + dayFactor*0.55;
+  scene.fog.color.copy(FOG_NIGHT.clone().lerp(FOG_DAY, dayFactor));
+
+  // gradient sky backdrop, projected far outside the jar
+  var skyTop = SKY_TOP_NIGHT.clone().lerp(SKY_TOP_DAY, dayFactor);
+  var skyHorizon = SKY_HORIZON_NIGHT.clone().lerp(SKY_HORIZON_DAY, dayFactor).lerp(SKY_HORIZON_WARM, horizonFactor*0.7);
+  for (var i=0;i<skyDomeT.length;i++){
+    var t = Math.pow(skyDomeT[i], 0.6);
+    skyDomeColors[i*3]   = skyHorizon.r + (skyTop.r-skyHorizon.r)*t;
+    skyDomeColors[i*3+1] = skyHorizon.g + (skyTop.g-skyHorizon.g)*t;
+    skyDomeColors[i*3+2] = skyHorizon.b + (skyTop.b-skyHorizon.b)*t;
+  }
+  skyDomeGeo.attributes.color.needsUpdate = true;
+
+  // sun disc + glow, projected onto the far sky, gone once well below the horizon
+  var sunPos = SKY_CENTER.clone().add(dir.clone().multiplyScalar(SKY_RADIUS));
+  sunDisc.position.copy(sunPos);
+  sunGlow.position.copy(sunPos);
+  var sunVisible = elev > -0.03;
+  sunDisc.visible = sunVisible;
+  sunGlow.visible = sunVisible;
+  sunDisc.material.color.copy(col);
+  sunGlow.material.color.copy(col);
+  sunGlow.material.opacity = dayFactor*0.75 + horizonFactor*0.15;
+
+  // moon: position is always opposite the sun — rises as the sun sets, sets as it rises.
+  // phase (the crescent/gibbous shape) is a separate concern, still driven by elapsed sim-days.
+  var moonPhase = currentJar ? (((currentJar.totalSimDays||0) + (currentJar.moonPhaseOffset||0)*MOON_PERIOD_DAYS) % MOON_PERIOD_DAYS) / MOON_PERIOD_DAYS : 0;
+  var moonAngle = angle + Math.PI;
+  var moonElev = Math.sin(moonAngle);
+  var moonDir = new THREE.Vector3(Math.cos(moonAngle), moonElev, 0.5*Math.sin(moonAngle*0.6+1.2)).normalize();
+  var moonPos = SKY_CENTER.clone().add(moonDir.multiplyScalar(SKY_RADIUS));
+  moonSprite.position.copy(moonPos);
+  moonGlow.position.copy(moonPos);
+  var moonAlpha = smoothstep(-0.08, 0.0, moonElev);
+  moonSprite.visible = moonAlpha > 0.02;
+  moonGlow.visible = moonAlpha > 0.02;
+  moonSprite.material.opacity = moonAlpha;
+  moonGlow.material.opacity = 0.22 * moonAlpha;
+  if (Math.abs(moonPhase - lastMoonPhaseDrawn) > 0.004){
+    updateMoonTexture(moonPhase);
+    lastMoonPhaseDrawn = moonPhase;
+  }
+
+  // stars + planets: slow constant drift, fade in as the sun goes down
+  starField.rotation.y += 0.0006;
+  planetField.rotation.y += 0.0006;
+  var nightAlpha = Math.max(0, Math.min(1, 1 - dayFactor*1.4));
+  starMat.opacity = nightAlpha * 0.85;
+  planetMat.opacity = nightAlpha * 0.9;
+  if (nightAlpha > 0.03){
+    for (var twi=0; twi<STAR_COUNT; twi++){
+      var tw = 0.75 + 0.25*Math.sin(elapsed*2.2 + starPhase[twi]);
+      starColArr[twi*3]   = starBaseCol[twi*3]*tw;
+      starColArr[twi*3+1] = starBaseCol[twi*3+1]*tw;
+      starColArr[twi*3+2] = starBaseCol[twi*3+2]*tw;
+    }
+    starGeo.attributes.color.needsUpdate = true;
+  }
+
+  // clouds: daytime only, drifting slowly
+  cloudGroup.rotation.y += 0.00025;
+  cloudSprites.forEach(function(c){ c.sprite.material.opacity = c.baseOpacity * dayFactor; });
+}
+
+/* =========================================================
+   NUDGE INTERACTION
+   ========================================================= */
+var bursts = [];
+var raycaster = new THREE.Raycaster();
+var mouseNDC = new THREE.Vector2();
+
+function getFocusTargets(){
+  var arr = [trunkMesh, pineMesh, brambleMesh, snowPineMesh, fernMesh, reedMesh, rockMesh, driftwoodMesh, dwellingGroup];
+  ALL_FAUNA.forEach(function(sp){
+    faunaVisuals[sp].forEach(function(rec){ arr.push(rec.obj); });
+  });
+  if (terrainMesh) arr.push(terrainMesh);
+  return arr;
+}
+
+function handleNudge(clientX, clientY){
+  if (!terrainMesh || !currentJar) return;
+  mouseNDC.x = (clientX/innerWidth)*2 - 1;
+  mouseNDC.y = -(clientY/innerHeight)*2 + 1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  var hits = raycaster.intersectObjects(getFocusTargets(), true);
+  if (!hits.length) return;
+  var hit = hits[0];
+
+  if (hit.object !== terrainMesh){
+    focusOn(hit.point);
+    return;
+  }
+
+  spawnBurst(hit.point);
+  ALL_FAUNA.forEach(function(sp){
+    (currentJar.entities[sp]||[]).forEach(function(e){
+      var d = Math.hypot(e.x-hit.point.x, e.z-hit.point.z);
+      if (d < 0.9){
+        var rec = faunaVisuals[sp].get(e.id);
+        if (rec){
+          var pushx = (e.x-hit.point.x)/(d+0.3), pushz = (e.z-hit.point.z)/(d+0.3);
+          rec.vx += pushx*0.6; rec.vz += pushz*0.6;
+        }
+      }
+    });
+  });
+}
+
+function spawnBurst(point){
+  var n = 22;
+  var geo = new THREE.BufferGeometry();
+  var pos = new Float32Array(n*3);
+  var vel = [];
+  for (var i=0;i<n;i++){
+    pos[i*3]=point.x; pos[i*3+1]=point.y+0.03; pos[i*3+2]=point.z;
+    var ang = Math.random()*Math.PI*2, spd = 0.25+Math.random()*0.5;
+    vel.push(new THREE.Vector3(Math.cos(ang)*spd, 0.5+Math.random()*0.7, Math.sin(ang)*spd));
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  var mat = new THREE.PointsMaterial({ size:0.045, map:burstTex, color:0xfff2cf, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:1 });
+  var pts = new THREE.Points(geo, mat);
+  scene.add(pts);
+  bursts.push({ points: pts, vel: vel, age: 0, life: 1.1 });
+}
+
+/* -- occasional overflow: a brief stream spills over the pond's rim and falls past the jar's base -- */
+/* -- perimeter overflow: not an occasional event, but a standing ring of overflow whose
+      density scales with the water body's own size — a small pond trickles, a full sea
+      overflows from all the way around. rebuilt whenever the pond radius changes (new jar). -- */
+var MAX_OVERFLOW = 2600;
+var overflowPos = new Float32Array(MAX_OVERFLOW*3);
+var overflowGeo = new THREE.BufferGeometry();
+overflowGeo.setAttribute('position', new THREE.BufferAttribute(overflowPos,3));
+var overflowMat = new THREE.PointsMaterial({ size:3.2, map:dropletTex, color:0x4fb8e0, transparent:true, depthWrite:false, sizeAttenuation:false, opacity:0.9 });
+var overflowPoints = new THREE.Points(overflowGeo, overflowMat);
+overflowPoints.frustumCulled = false; // particles range far beyond their small initial footprint; never let a stale bounding sphere hide them
+scene.add(overflowPoints);
+var overflowPang = new Float32Array(MAX_OVERFLOW);
+var overflowAge = new Float32Array(MAX_OVERFLOW);
+var overflowSplash = new Float32Array(MAX_OVERFLOW); // per-particle variance: most fall close in, a few splash out much further
+var overflowCount = 0;
+
+function randomSplash(){
+  return 0.7 + Math.pow(Math.random(), 3) * 2.4; // biased low, occasional high outliers
+}
+
+// continuous, uneven overflow intensity around the ring — three harmonics at different
+// frequencies, each drifting at its own independent speed, so peaks merge/split/migrate
+// over time rather than settling into a fixed, countable number of "hot spots"
+function overflowIntensityAt(angle, t){
+  var v = Math.sin(angle       + t*0.045) * 0.5
+        + Math.sin(angle*2 - t*0.071 + 1.7) * 0.32
+        + Math.sin(angle*3 + t*0.033 + 3.1) * 0.22;
+  return Math.max(0.12, Math.min(1.35, v*0.55 + 0.62)); // always some flow, never fully dead
+}
+var overflowMistTimer = 0;
+var activeMist = [];
+
+function rebuildOverflow(){
+  // density scales with circumference (∝ radius), so bigger water bodies overflow more broadly
+  overflowCount = Math.min(MAX_OVERFLOW, Math.max(70, Math.round(currentPondRadius * 550)));
+  for (var i=0;i<overflowCount;i++){
+    overflowPang[i] = (i/overflowCount)*Math.PI*2 + (Math.random()*0.5-0.25);
+    overflowAge[i] = Math.random()*3.6;
+    overflowSplash[i] = randomSplash();
+    var idx = i*3;
+    overflowPos[idx]   = Math.cos(overflowPang[i])*currentPondRadius;
+    overflowPos[idx+1] = WATER_Y - 0.02;
+    overflowPos[idx+2] = Math.sin(overflowPang[i])*currentPondRadius;
+  }
+  overflowGeo.setDrawRange(0, overflowCount);
+  overflowGeo.attributes.position.needsUpdate = true;
+  rebuildUnderdrip();
+  rebuildOverflowBody();
+}
+
+// secondary effect: drips falling from near the outer rim of the wooden base's underside —
+// positioned close to the base's edge (rather than its center) since that's the only region
+// with a real chance of being visible past the disk from a typical elevated viewing angle
+var MAX_UNDERDRIP = 260;
+var underdripPos = new Float32Array(MAX_UNDERDRIP*3);
+var underdripGeo = new THREE.BufferGeometry();
+underdripGeo.setAttribute('position', new THREE.BufferAttribute(underdripPos,3));
+var underdripMat = new THREE.PointsMaterial({ size:3.0, map:dropletTex, color:0x4fb8e0, transparent:true, depthWrite:false, sizeAttenuation:false, opacity:0.7 });
+var underdripPoints = new THREE.Points(underdripGeo, underdripMat);
+underdripPoints.frustumCulled = false;
+scene.add(underdripPoints);
+var underdripAng = new Float32Array(MAX_UNDERDRIP);
+var underdripRad = new Float32Array(MAX_UNDERDRIP);
+var underdripAge = new Float32Array(MAX_UNDERDRIP);
+var underdripCount = 0;
+
+// the main body of the overflow — far denser and smaller than the droplet layer above,
+// which now serves only as a visible splash accent on top of this
+var MAX_BODY = 36000;
+var bodyPos = new Float32Array(MAX_BODY*3);
+var bodyGeo = new THREE.BufferGeometry();
+bodyGeo.setAttribute('position', new THREE.BufferAttribute(bodyPos,3));
+var bodyMat = new THREE.PointsMaterial({ size:2.9, map:dropletTex, color:0x7ecdf0, transparent:true, depthWrite:false, sizeAttenuation:false, opacity:0.9 });
+var bodyPoints = new THREE.Points(bodyGeo, bodyMat);
+bodyPoints.frustumCulled = false;
+scene.add(bodyPoints);
+var bodyPang = new Float32Array(MAX_BODY);
+var bodyAge = new Float32Array(MAX_BODY);
+var bodySplash = new Float32Array(MAX_BODY);
+var bodyCount = 0;
+
+function rebuildOverflowBody(){
+  bodyCount = Math.min(MAX_BODY, Math.max(1600, Math.round(currentPondRadius * 8000)));
+  for (var i=0;i<bodyCount;i++){
+    bodyPang[i] = (i/bodyCount)*Math.PI*2 + (Math.random()*0.5-0.25);
+    bodyAge[i] = Math.random()*3.6;
+    bodySplash[i] = randomSplash();
+    var idx = i*3;
+    bodyPos[idx]   = Math.cos(bodyPang[i])*currentPondRadius;
+    bodyPos[idx+1] = WATER_Y - 0.02;
+    bodyPos[idx+2] = Math.sin(bodyPang[i])*currentPondRadius;
+  }
+  bodyGeo.setDrawRange(0, bodyCount);
+  bodyGeo.attributes.position.needsUpdate = true;
+}
+
+function stepOverflowBody(dt, elapsed){
+  if (bodyCount === 0) return;
+  var originY = WATER_Y - 0.02;
+  var arr = bodyGeo.attributes.position.array;
+  for (var i=0;i<bodyCount;i++){
+    var idx = i*3;
+    var outX = Math.cos(bodyPang[i]), outZ = Math.sin(bodyPang[i]);
+    bodyAge[i] += dt;
+    if (bodyAge[i] > 3.6 || arr[idx+1] < -1.1){
+      arr[idx]   = outX*currentPondRadius + (Math.random()*0.025-0.0125);
+      arr[idx+1] = originY;
+      arr[idx+2] = outZ*currentPondRadius + (Math.random()*0.025-0.0125);
+      bodyAge[i] = 0;
+      bodySplash[i] = randomSplash();
+    } else {
+      var localMul = overflowIntensityAt(bodyPang[i], elapsed);
+      var ease = Math.min(1, bodyAge[i]/0.6);
+      ease = ease*ease*(3-2*ease);
+      var outSpeed = (1.4*(1-ease) + 0.08*ease) * bodySplash[i] * localMul;
+      var fallAccel = (0.5*(1-ease) + 2.0*ease + Math.max(0, bodyAge[i]-0.6)*2.4) * localMul;
+      arr[idx]   += outX*dt*outSpeed;
+      arr[idx+2] += outZ*dt*outSpeed;
+      arr[idx+1] -= fallAccel*dt;
+    }
+  }
+  bodyGeo.attributes.position.needsUpdate = true;
+}
+
+function rebuildUnderdrip(){
+  underdripCount = Math.min(MAX_UNDERDRIP, Math.max(30, Math.round(currentPondRadius*70)));
+  for (var i=0;i<underdripCount;i++){
+    underdripAng[i] = Math.random()*Math.PI*2;
+    underdripRad[i] = JAR_R*1.16 + Math.random()*(JAR_R*1.31 - JAR_R*1.16);
+    underdripAge[i] = Math.random()*2.5;
+    var idx = i*3;
+    underdripPos[idx]   = Math.cos(underdripAng[i])*underdripRad[i];
+    underdripPos[idx+1] = -0.34;
+    underdripPos[idx+2] = Math.sin(underdripAng[i])*underdripRad[i];
+  }
+  underdripGeo.setDrawRange(0, underdripCount);
+  underdripGeo.attributes.position.needsUpdate = true;
+}
+
+function stepUnderdrip(dt){
+  if (underdripCount === 0) return;
+  var arr = underdripGeo.attributes.position.array;
+  for (var i=0;i<underdripCount;i++){
+    var idx = i*3;
+    underdripAge[i] += dt;
+    if (arr[idx+1] < -1.2){
+      underdripAge[i] = 0;
+      arr[idx]   = Math.cos(underdripAng[i])*underdripRad[i];
+      arr[idx+1] = -0.34;
+      arr[idx+2] = Math.sin(underdripAng[i])*underdripRad[i];
+    } else {
+      arr[idx+1] -= (0.3 + underdripAge[i]*0.9) * dt;
+      arr[idx]   += (Math.random()*0.004-0.002);
+      arr[idx+2] += (Math.random()*0.004-0.002);
+    }
+  }
+  underdripGeo.attributes.position.needsUpdate = true;
+}
+
+function stepWaterfalls(dt, elapsed){
+  if (!currentJar || overflowCount === 0) return;
+  var originY = WATER_Y - 0.02;
+  var flowRate = 0.6 + 0.4*Math.sin(elapsed*0.11 + 2.1); // same slow calm/brisk drift as the pond shimmer
+  var arr = overflowGeo.attributes.position.array;
+  for (var i=0;i<overflowCount;i++){
+    var idx = i*3;
+    overflowAge[i] += dt*flowRate;
+    var outX = Math.cos(overflowPang[i]), outZ = Math.sin(overflowPang[i]);
+    if (overflowAge[i] > 3.6 || arr[idx+1] < -1.1){
+      arr[idx]   = outX*currentPondRadius + (Math.random()*0.025-0.0125);
+      arr[idx+1] = originY;
+      arr[idx+2] = outZ*currentPondRadius + (Math.random()*0.025-0.0125);
+      overflowAge[i] = 0;
+      overflowSplash[i] = randomSplash(); // re-roll so the same particle doesn't always splash the same amount
+    } else {
+      // gravity dominates: a brief, splash-scaled outward release fading fast, then a strong,
+      // quickly-ramping fall for the rest of the drop — most particles fall close to the rim,
+      // a few (high splash factor) visibly kick out further, matching how real water splits apart
+      var localMul = overflowIntensityAt(overflowPang[i], elapsed);
+      var ease = Math.min(1, overflowAge[i]/0.6);
+      ease = ease*ease*(3-2*ease); // smoothstep
+      var outSpeed = (1.4*(1-ease) + 0.08*ease) * overflowSplash[i] * localMul;
+      var fallAccel = (0.5*(1-ease) + 2.0*ease + Math.max(0, overflowAge[i]-0.6)*2.4) * localMul;
+      arr[idx]   += outX*dt*outSpeed;
+      arr[idx+2] += outZ*dt*outSpeed;
+      arr[idx+1] -= fallAccel*dt;
+    }
+  }
+  overflowGeo.attributes.position.needsUpdate = true;
+  overflowMat.opacity = 0.55 + 0.35*flowRate;
+
+  // mist rising along the whole overflow ring, rate scaled with its size same as the water itself
+  overflowMistTimer -= dt;
+  if (overflowMistTimer <= 0){
+    overflowMistTimer = Math.max(0.05, 0.6/(currentPondRadius));
+    var mAng = Math.random()*Math.PI*2;
+    var mistRadius = currentPondRadius + 3.3 + Math.random()*0.6;
+    var mx = Math.cos(mAng)*mistRadius, mz = Math.sin(mAng)*mistRadius;
+    var my = -0.6 - Math.random()*0.4;
+    var mistMat = new THREE.SpriteMaterial({ map:mistTex, color:0xe8f2f5, transparent:true, depthWrite:false, opacity:0.4 });
+    var mistSpr = new THREE.Sprite(mistMat);
+    mistSpr.scale.setScalar(0.06 + Math.random()*0.04);
+    mistSpr.position.set(mx, my, mz);
+    scene.add(mistSpr);
+    activeMist.push({ sprite:mistSpr, age:0, life:2.2+Math.random(), vx:(Math.random()*0.03-0.015), vz:(Math.random()*0.03-0.015) });
+  }
+
+  for (var mi=activeMist.length-1; mi>=0; mi--){
+    var mm = activeMist[mi];
+    mm.age += dt;
+    mm.sprite.position.y += dt*0.045;
+    mm.sprite.position.x += mm.vx*dt;
+    mm.sprite.position.z += mm.vz*dt;
+    mm.sprite.scale.setScalar(0.06 + mm.age*0.05);
+    mm.sprite.material.opacity = Math.max(0, 0.4*(1-mm.age/mm.life));
+    if (mm.age > mm.life){
+      scene.remove(mm.sprite); mm.sprite.material.dispose();
+      activeMist.splice(mi,1);
+    }
+  }
+}
+
+/* =========================================================
+   ALMANAC BOOK + JARS UI
+   ========================================================= */
+var almanacBtn = document.getElementById('almanacBtn');
+var jarsBtn = document.getElementById('jarsBtn');
+var jarsPanel = document.getElementById('jarsPanel');
+var bookOverlay = document.getElementById('bookOverlay');
+var bookCover = document.getElementById('bookCover');
+var bookCloseBtn = document.getElementById('bookCloseBtn');
+var CHAPTER_ORDER = ['flora','fauna','feature'];
+var activeChapter = 'flora';
+
+function openBook(chapter){
+  if (chapter) activeChapter = chapter;
+  jarsPanel.classList.remove('open');
+  bookOverlay.classList.add('open');
+  renderAlmanacPanel();
+}
+function closeBook(){
+  bookOverlay.classList.remove('open');
+}
+function goToChapter(dir){
+  var idx = CHAPTER_ORDER.indexOf(activeChapter);
+  idx = (idx + dir + CHAPTER_ORDER.length) % CHAPTER_ORDER.length;
+  activeChapter = CHAPTER_ORDER[idx];
+  renderAlmanacPanel();
+}
+almanacBtn.addEventListener('click', function(){ openBook(); });
+bookCover.addEventListener('click', function(){
+  if (!bookOverlay.classList.contains('open')) openBook();
+});
+bookCloseBtn.addEventListener('click', closeBook);
+bookOverlay.addEventListener('click', function(e){
+  if (e.target === bookOverlay) closeBook();
+});
+document.addEventListener('keydown', function(e){
+  if (!bookOverlay.classList.contains('open')) return;
+  if (e.key === 'Escape') closeBook();
+  if (e.key === 'ArrowRight') goToChapter(1);
+  if (e.key === 'ArrowLeft') goToChapter(-1);
+});
+Array.prototype.forEach.call(document.querySelectorAll('.book-tab'), function(tab){
+  tab.addEventListener('click', function(e){
+    e.stopPropagation();
+    var cat = tab.getAttribute('data-cat');
+    if (bookOverlay.classList.contains('open')){ activeChapter = cat; renderAlmanacPanel(); }
+    else openBook(cat);
+  });
+});
+
+// swipe the page content left/right to flip between chapters
+var bookPageContentEl = document.getElementById('bookPageContent');
+var swipeStart = null;
+bookPageContentEl.addEventListener('pointerdown', function(e){ swipeStart = { x:e.clientX, y:e.clientY }; });
+bookPageContentEl.addEventListener('pointerup', function(e){
+  if (!swipeStart) return;
+  var dx = e.clientX - swipeStart.x, dy = e.clientY - swipeStart.y;
+  swipeStart = null;
+  if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)*1.4){
+    goToChapter(dx < 0 ? 1 : -1);
+  }
+});
+bookPageContentEl.addEventListener('pointercancel', function(){ swipeStart = null; });
+
+jarsBtn.addEventListener('click', function(){
+  closeBook();
+  renderJarsPanel();
+  jarsPanel.classList.toggle('open');
+});
+
+function renderAlmanacPanel(){
+  Array.prototype.forEach.call(document.querySelectorAll('.book-tab'), function(tab){
+    tab.classList.toggle('active', tab.getAttribute('data-cat') === activeChapter);
+  });
+  var content = document.getElementById('bookPageContent');
+  if (!content) return;
+  var ids = Object.keys(REGISTRY).filter(function(id){ return REGISTRY[id].category === activeChapter; });
+  var html = '';
+  ids.forEach(function(id){
+    var def = REGISTRY[id];
+    var found = discoveries[id];
+    if (found){
+      var lifespan = def.lifespanDays ? ('lives ~' + def.lifespanDays + ' days') : 'no lifespan — persists once placed';
+      html += '<div class="book-entry"><div class="book-entry-name">'+def.name+'</div>' +
+        '<div class="book-entry-meta">'+def.rarity+' · '+lifespan+' · seen '+found.timesSeen+'x</div>' +
+        '<div class="book-entry-desc">'+def.description+'</div></div>';
+    } else {
+      html += '<div class="book-entry locked"><div class="book-entry-name">?????</div>' +
+        '<div class="book-entry-meta">an uncatalogued '+activeChapter+'</div></div>';
+    }
+  });
+  content.innerHTML = html;
+  // restart the page-fade animation on chapter switch
+  content.style.animation = 'none';
+  void content.offsetWidth;
+  content.style.animation = '';
+}
+
+function relativeTime(ts){
+  var s = (Date.now()-ts)/1000;
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60)+'m ago';
+  if (s < 86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+function renderJarsPanel(){
+  var body = document.getElementById('jarsBody');
+  var html = '';
+  jarIndex.slice().sort(function(a,b){ return b.lastVisited-a.lastVisited; }).forEach(function(j){
+    var active = currentJar && j.seed === currentJar.seed;
+    html += '<div class="jar-row'+(active?' active':'')+'" data-seed="'+j.seed+'">' +
+      '<span class="jar-name">'+j.name+'</span><span class="when">'+relativeTime(j.lastVisited)+'</span>' +
+      '<button class="delete-btn" data-seed="'+j.seed+'" title="Delete this jar">✕</button></div>';
+  });
+  body.innerHTML = html;
+  Array.prototype.forEach.call(body.querySelectorAll('.jar-row'), function(row){
+    row.addEventListener('click', function(){
+      var seed = parseInt(row.getAttribute('data-seed'), 10);
+      if (currentJar && seed === currentJar.seed) return;
+      switchToJar(seed);
+      jarsPanel.classList.remove('open');
+    });
+  });
+  Array.prototype.forEach.call(body.querySelectorAll('.delete-btn'), function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var seed = parseInt(btn.getAttribute('data-seed'), 10);
+      var entry = jarIndex.find(function(j){ return j.seed === seed; });
+      var label = entry ? entry.name : 'this jar';
+      if (!window.confirm('Delete "' + label + '"? This can\'t be undone.')) return;
+      deleteJar(seed);
+    });
+  });
+}
+
+async function deleteJar(seed){
+  var wasActive = currentJar && currentJar.seed === seed;
+  jarIndex = jarIndex.filter(function(j){ return j.seed !== seed; });
+  await safeDelete('jar:' + seedHex(seed));
+  await safeSet('jars:index', jarIndex);
+
+  if (wasActive){
+    currentJar = null; // avoid switchToJar's opening persist step resurrecting the jar we just deleted
+    if (jarIndex.length){
+      var next = jarIndex.slice().sort(function(a,b){ return b.lastVisited-a.lastVisited; })[0];
+      await switchToJar(next.seed);
+    } else {
+      var seed2 = randomSeed();
+      var fresh = createFreshJarRecord(seed2);
+      jarIndex.push({ seed: seed2, name: fresh.name, createdAt: fresh.createdAt, lastVisited: fresh.lastVisited });
+      currentJar = fresh;
+      noteDiscoveries(currentJar);
+      loadWorldVisuals(currentJar);
+      await persistJar(currentJar);
+      renderAlmanacPanel();
+    }
+  }
+  renderJarsPanel();
+}
+
+async function clearAllJars(){
+  if (!window.confirm('Delete all ' + jarIndex.length + ' jar(s)? This can\'t be undone. A fresh jar will be created.')) return;
+  for (var i=0;i<jarIndex.length;i++){
+    await safeDelete('jar:' + seedHex(jarIndex[i].seed));
+  }
+  jarIndex = [];
+  await safeSet('jars:index', jarIndex);
+  var seed = randomSeed();
+  var fresh = createFreshJarRecord(seed);
+  jarIndex.push({ seed: seed, name: fresh.name, createdAt: fresh.createdAt, lastVisited: fresh.lastVisited });
+  currentJar = fresh;
+  noteDiscoveries(currentJar);
+  loadWorldVisuals(currentJar);
+  await persistJar(currentJar);
+  renderAlmanacPanel();
+  renderJarsPanel();
+}
+document.getElementById('clearAllBtn').addEventListener('click', clearAllJars);
+
+/* =========================================================
+   AWAY-LOG TOAST
+   ========================================================= */
+function showAwayLog(lines){
+  if (!lines || !lines.length) return;
+  var el = document.getElementById('awaylog');
+  var MAX_ROWS = 4;
+  var shown = lines.slice(0, MAX_ROWS);
+  var extra = lines.length - shown.length;
+  var rowsHtml = shown.map(function(line){
+    var sp = line.indexOf(' ');
+    var hasIcon = sp > 0 && sp <= 3; // leading emoji is 1-2 chars + space
+    var icon = hasIcon ? line.slice(0, sp) : '•';
+    var text = hasIcon ? line.slice(sp+1) : line;
+    return '<div class="row"><span class="icon">'+icon+'</span><span class="text">'+text+'</span></div>';
+  }).join('');
+  if (extra > 0) rowsHtml += '<div class="more">+' + extra + ' more change' + (extra===1?'':'s') + '</div>';
+  el.innerHTML = '<div class="title">while you were away</div>' + rowsHtml;
+  el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 7000);
+}
+
+/* =========================================================
+   JAR SWITCHING / CREATION
+   ========================================================= */
+function loadWorldVisuals(jar){
+  currentSampler = createTerrainSampler(jar.seed);
+  rebuildStaticWorld(currentSampler);
+  refreshTreeInstances(jar, currentSampler);
+  refreshSmallFloraInstances(jar, currentSampler);
+  refreshFaunaVisuals(jar, currentSampler);
+  document.getElementById('seedval').textContent = seedHex(jar.seed);
+}
+
+async function switchToJar(seed){
+  if (currentJar) await persistJar(currentJar);
+  var loaded = await safeGet('jar:' + seedHex(seed));
+  if (!loaded) loaded = createFreshJarRecord(seed);
+  if (loaded.moonPhaseOffset === undefined) loaded.moonPhaseOffset = Math.random();
+  var offlineSeconds = (Date.now() - loaded.lastVisited) / 1000;
+  var sampler = createTerrainSampler(loaded.seed);
+  if (!loaded.biome) loaded.biome = sampler.biome;
+  if (!loaded.waterBody) loaded.waterBody = sampler.waterBody;
+  if (!loaded.entities.smallFlora) loaded.entities.smallFlora = [];
+  var log = [];
+  if (offlineSeconds > 5){
+    var offlineSeed = ((loaded.seed ^ Math.floor(loaded.lastVisited)) >>> 0) || 1;
+    var offlineRng = mulberry32(offlineSeed);
+    advanceSimulation(loaded, sampler, offlineSeconds/SIM_DAY_SECONDS, offlineRng, log);
+  }
+  currentJar = loaded;
+  noteDiscoveries(currentJar);
+  loadWorldVisuals(currentJar);
+  await persistJar(currentJar);
+  renderAlmanacPanel();
+  showAwayLog(log);
+}
+
+document.getElementById('newworld').addEventListener('click', async function(){
+  var seed = randomSeed();
+  var fresh = createFreshJarRecord(seed);
+  jarIndex.push({ seed: seed, name: fresh.name, createdAt: fresh.createdAt, lastVisited: fresh.lastVisited });
+  if (currentJar) await persistJar(currentJar);
+  currentJar = fresh;
+  noteDiscoveries(currentJar);
+  loadWorldVisuals(currentJar);
+  await persistJar(currentJar);
+  renderAlmanacPanel();
+});
+
+/* =========================================================
+   ANIMATION LOOP
+   ========================================================= */
+var clock = new THREE.Clock();
+var liveTickAccum = 0;
+var autosaveAccum = 0;
+
+function animate(){
+  requestAnimationFrame(animate);
+  var dt = Math.min(clock.getDelta(), 0.05);
+  var elapsed = clock.elapsedTime;
+
+  if (!pointer.down){
+    idleTimer += dt;
+    if (idleTimer > 4.5) orbit.theta += dt * 0.035;
+  }
+  target.lerp(targetGoal, Math.min(1, dt*4));
+  if (radiusGoal !== null){
+    orbit.radius += (radiusGoal - orbit.radius) * Math.min(1, dt*4);
+    if (Math.abs(orbit.radius - radiusGoal) < 0.01) radiusGoal = null;
+  }
+  updateCameraFromOrbit();
+  updateDayNight(elapsed);
+
+  var pa = motes.geometry.attributes.position;
+  for (var m=0;m<moteCount;m++){
+    var yv = pa.array[m*3+1] + moteSpeed[m]*dt;
+    if (yv > JAR_WALL_H*1.5) yv = 0.02;
+    pa.array[m*3+1] = yv;
+    pa.array[m*3] += Math.sin(elapsed*0.6+motePhase[m])*0.0015;
+    pa.array[m*3+2] += Math.cos(elapsed*0.5+motePhase[m])*0.0015;
+  }
+  pa.needsUpdate = true;
+
+  if (grassBlades.length){
+    for (var gi=0; gi<grassBlades.length; gi++){
+      var b = grassBlades[gi];
+      var sway = Math.sin(elapsed*1.6 + b.phase + b.x*0.8) * 0.22;
+      grassDummy.position.set(b.x, b.y, b.z);
+      grassDummy.rotation.set(sway*0.5, b.rotY, sway);
+      grassDummy.scale.setScalar(b.scale);
+      grassDummy.updateMatrix();
+      grassMesh.setMatrixAt(gi, grassDummy.matrix);
+    }
+    grassMesh.instanceMatrix.needsUpdate = true;
+  }
+  var flowRate = 0.55 + 0.45*Math.sin(elapsed*0.11 + 2.1); // 0.1..1.0, drifts slowly between calm and brisk
+  pondMat.map.offset.x += dt*0.014*flowRate;
+  pondMat.map.offset.y += dt*0.009*flowRate;
+  stepWaterfalls(dt, elapsed);
+  stepUnderdrip(dt);
+  stepOverflowBody(dt, elapsed);
+  stepSmoke(dt, elapsed);
+
+  if (currentJar && currentSampler){
+    stepFaunaWander(currentJar, currentSampler, dt, elapsed);
+
+    liveTickAccum += dt;
+    if (liveTickAccum > 8){
+      var days = liveTickAccum / SIM_DAY_SECONDS;
+      liveTickAccum = 0;
+      advanceSimulation(currentJar, currentSampler, days, Math.random, null);
+      refreshTreeInstances(currentJar, currentSampler);
+      refreshSmallFloraInstances(currentJar, currentSampler);
+      refreshFaunaVisuals(currentJar, currentSampler);
+    }
+
+    autosaveAccum += dt;
+    if (autosaveAccum > 20){ autosaveAccum = 0; persistJar(currentJar); }
+  }
+
+  for (var i=bursts.length-1;i>=0;i--){
+    var burst = bursts[i];
+    burst.age += dt;
+    var t = burst.age/burst.life;
+    var arr = burst.points.geometry.attributes.position.array;
+    for (var k=0;k<burst.vel.length;k++){
+      arr[k*3] += burst.vel[k].x*dt;
+      arr[k*3+1] += (burst.vel[k].y - 1.1*burst.age)*dt;
+      arr[k*3+2] += burst.vel[k].z*dt;
+    }
+    burst.points.geometry.attributes.position.needsUpdate = true;
+    burst.points.material.opacity = Math.max(0, 1-t);
+    if (t >= 1){
+      scene.remove(burst.points);
+      burst.points.geometry.dispose(); burst.points.material.dispose();
+      bursts.splice(i,1);
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('visibilitychange', function(){
+  if (document.hidden && currentJar) persistJar(currentJar);
+});
+window.addEventListener('beforeunload', function(){
+  if (currentJar) persistJar(currentJar);
+});
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+async function boot(){
+  jarIndex = (await safeGet('jars:index')) || [];
+  discoveries = (await safeGet('almanac:discoveries')) || {};
+
+  var log = [];
+  if (!jarIndex.length){
+    var seed = randomSeed();
+    currentJar = createFreshJarRecord(seed);
+    jarIndex.push({ seed: seed, name: currentJar.name, createdAt: currentJar.createdAt, lastVisited: currentJar.lastVisited });
+  } else {
+    var top = jarIndex.slice().sort(function(a,b){ return b.lastVisited-a.lastVisited; })[0];
+    var loaded = await safeGet('jar:' + seedHex(top.seed));
+    if (!loaded) loaded = createFreshJarRecord(top.seed);
+    if (loaded.moonPhaseOffset === undefined) loaded.moonPhaseOffset = Math.random();
+    var offlineSeconds = (Date.now() - loaded.lastVisited) / 1000;
+    var sampler = createTerrainSampler(loaded.seed);
+    if (!loaded.biome) loaded.biome = sampler.biome;
+    if (!loaded.waterBody) loaded.waterBody = sampler.waterBody;
+    if (!loaded.entities.smallFlora) loaded.entities.smallFlora = [];
+    if (offlineSeconds > 5){
+      var offlineSeed = ((loaded.seed ^ Math.floor(loaded.lastVisited)) >>> 0) || 1;
+      var offlineRng = mulberry32(offlineSeed);
+      advanceSimulation(loaded, sampler, offlineSeconds/SIM_DAY_SECONDS, offlineRng, log);
+    }
+    currentJar = loaded;
+  }
+
+  noteDiscoveries(currentJar);
+  loadWorldVisuals(currentJar);
+  await persistJar(currentJar);
+  renderAlmanacPanel();
+  updateCameraFromOrbit();
+
+  if (!storageAvailable) {
+    showAwayLog(['storage isn\'t available in this preview, so this jar won\'t be saved between visits.']);
+  } else {
+    showAwayLog(log);
+  }
+
+  var loadingEl = document.getElementById('loading');
+  loadingEl.style.opacity = '0';
+  setTimeout(function(){ loadingEl.style.display = 'none'; }, 650);
+
+  animate();
+}
+
+boot();
+})();
+</script>
+</body>
+</html>
