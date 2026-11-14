@@ -358,7 +358,15 @@
   }
   .intro-skip:hover{ background: rgba(255,255,255,0.16); color: var(--ink); }
   .intro-skip.hidden{ opacity:0; pointer-events:none; }
-  #introSpacer{ height: 480vh; position:relative; z-index:1; }
+  #introScroller{
+    position:fixed; inset:0; z-index:49;
+    overflow-y:scroll; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+  }
+  #introScroller::-webkit-scrollbar{ display:none; }
+  #introSpacer{ height: 480vh; width:100%; }
 
   #loading{
     position:fixed; inset:0; background:#0e0d12; z-index:10;
@@ -370,7 +378,7 @@
 </style>
 </head>
 <body>
-<div id="introSpacer"></div>
+<div id="introScroller"><div id="introSpacer"></div></div>
 <div id="introOverlay">
   <div id="introBg"></div>
   <div class="intro-sigil" id="introSigil">✦</div>
@@ -2686,11 +2694,9 @@ for (var introI=0; introI<26; introI++){
   introBg.appendChild(introStar);
 }
 
-// the page itself scrolls during the walkthrough (the tall spacer drives it);
-// the canvas must let touch gestures through, and the page is locked again afterwards
-document.documentElement.style.overflowY = 'auto';
-document.body.style.overflowY = 'auto';
-canvas.style.touchAction = 'pan-y';
+// a dedicated fixed scroll container drives the walkthrough (page-level scroll proved unreliable,
+// especially on iOS); it sits above the canvas so touches scroll it, and is removed when done
+var introScrollerEl = document.getElementById('introScroller');
 stageEl.style.opacity = '0';
 stageEl.style.transform = 'scale(0.86)';
 orbit.radius = introStartRadius;
@@ -2706,8 +2712,8 @@ function setIntroStep(frac){
 
 function onIntroScroll(){
   if (!introActive) return;
-  var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  var frac = Math.min(1, Math.max(0, window.scrollY / maxScroll));
+  var maxScroll = Math.max(1, introScrollerEl.scrollHeight - introScrollerEl.clientHeight);
+  var frac = Math.min(1, Math.max(0, introScrollerEl.scrollTop / maxScroll));
 
   // the jar materializes out of the dark over the first stretch of scroll
   var matProg = Math.min(1, frac/0.12);
@@ -2740,10 +2746,7 @@ function finishIntro(){
   introSkipBtn.classList.add('hidden');
   stageEl.style.opacity = '1';
   stageEl.style.transform = 'none';
-  canvas.style.touchAction = 'none';
-  document.documentElement.style.overflowY = 'hidden';
-  document.body.style.overflowY = 'hidden';
-  window.scrollTo(0, 0);
+  introScrollerEl.style.pointerEvents = 'none'; // stop it capturing touches immediately; fully removed below
   orbit.theta = introStartTheta;
   orbit.radius = 8.2;
   idleTimer = 0;
@@ -2752,13 +2755,12 @@ function finishIntro(){
   setTimeout(function(){
     introOverlay.style.display = 'none';
     introSkipBtn.style.display = 'none';
-    var spacer = document.getElementById('introSpacer');
-    if (spacer) spacer.style.display = 'none';
+    introScrollerEl.style.display = 'none';
   }, 900);
 }
 
 introSkipBtn.addEventListener('click', finishIntro);
-window.addEventListener('scroll', onIntroScroll);
+introScrollerEl.addEventListener('scroll', onIntroScroll, { passive: true });
 onIntroScroll();
 
 boot();
