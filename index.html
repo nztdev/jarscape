@@ -301,30 +301,26 @@
     .book-page-content{ padding-right:0; padding-top: 36px; }
   }
 
-  #introScreen{
+  #introOverlay{
     position:fixed; inset:0; z-index:50;
-    background: radial-gradient(ellipse at 50% 42%, #1c1f2e 0%, #0a0a10 72%);
-    display:flex; align-items:center; justify-content:center;
-    opacity:1; transition: opacity 0.9s ease;
-    cursor: pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    pointer-events:none;
+    transition: opacity 0.8s ease;
   }
-  #introScreen.hidden{ opacity:0; pointer-events:none; }
+  #introOverlay.hidden{ opacity:0; }
+  #introBg{
+    position:absolute; inset:0; z-index:-1;
+    background: radial-gradient(ellipse at 50% 42%, #1c1f2e 0%, #0a0a10 72%);
+  }
   .intro-star{
     position:absolute; width:2px; height:2px; border-radius:50%;
     background: #f4ead9; opacity:0.5;
     animation: introTwinkle 3.4s ease-in-out infinite;
   }
   @keyframes introTwinkle{ 0%,100%{ opacity:0.15; } 50%{ opacity:0.85; } }
-  .intro-content{
-    text-align:center; position:relative; z-index:1;
-    animation: introFadeIn 1.5s ease both;
-  }
-  @keyframes introFadeIn{
-    from{ opacity:0; transform: translateY(14px) scale(0.97); }
-    to{ opacity:1; transform: translateY(0) scale(1); }
-  }
   .intro-sigil{
-    font-size: 32px; color: var(--amber); margin-bottom: 18px;
+    font-size: 30px; color: var(--amber); margin-bottom: 14px;
+    transition: opacity 0.6s ease, transform 0.6s ease;
     animation: introPulse 3s ease-in-out infinite;
   }
   @keyframes introPulse{
@@ -332,22 +328,37 @@
     50%{ opacity:1; transform:scale(1.14); }
   }
   .intro-title{
-    font-family: Georgia, serif; font-size: 54px; letter-spacing: 0.09em;
-    color: var(--ink); margin:0; text-shadow: 0 0 34px rgba(242,166,90,0.35);
+    font-family: Georgia, serif; font-size: 50px; letter-spacing: 0.09em;
+    color: var(--ink); margin:0 0 34px 0; text-shadow: 0 0 34px rgba(242,166,90,0.35);
+    transition: opacity 0.6s ease, transform 0.6s ease;
   }
-  .intro-tagline{
-    font-family: Georgia, serif; font-style: italic; color: var(--ink-dim);
-    font-size: 15px; margin-top: 16px; letter-spacing: 0.01em;
+  #introPrompts{ position:relative; width:min(86vw,520px); height:76px; }
+  .intro-prompt{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; font-family: Georgia, serif; font-style: italic; color: var(--ink-dim);
+    font-size: 16px; line-height:1.55; opacity:0; transition: opacity 0.6s ease;
   }
+  .intro-prompt.active{ opacity:1; }
+  #introScrollHint{
+    position:absolute; bottom:60px; left:50%; transform:translateX(-50%);
+    font-family: -apple-system, sans-serif; font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+    color: var(--ink-dim); opacity:0.6; transition: opacity 0.4s ease;
+    animation: hintBob 1.8s ease-in-out infinite;
+  }
+  @keyframes hintBob{ 0%,100%{ transform:translate(-50%,0); } 50%{ transform:translate(-50%,6px); } }
+  #introScrollHint.hidden{ opacity:0; }
   .intro-skip{
-    position: fixed; bottom: 28px; right: 28px; z-index:2;
+    position: fixed; bottom: 28px; right: 28px; z-index:51;
+    pointer-events:auto;
     appearance:none; border:none; cursor:pointer;
     background: rgba(255,255,255,0.08); color: var(--ink-dim);
     font-family: -apple-system, sans-serif; font-size: 12px;
     padding: 9px 16px; border-radius: 999px;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, opacity 0.5s ease;
   }
   .intro-skip:hover{ background: rgba(255,255,255,0.16); color: var(--ink); }
+  .intro-skip.hidden{ opacity:0; pointer-events:none; }
+  #introSpacer{ height: 480vh; position:relative; z-index:1; }
 
   #loading{
     position:fixed; inset:0; background:#0e0d12; z-index:10;
@@ -359,41 +370,21 @@
 </style>
 </head>
 <body>
-<div id="introScreen">
-  <div class="intro-content">
-    <div class="intro-sigil">✦</div>
-    <h1 class="intro-title">Jarscape</h1>
-    <p class="intro-tagline">Small worlds, watched more than played.</p>
+<div id="introSpacer"></div>
+<div id="introOverlay">
+  <div id="introBg"></div>
+  <div class="intro-sigil" id="introSigil">✦</div>
+  <h1 class="intro-title" id="introTitleText">Jarscape</h1>
+  <div id="introPrompts">
+    <div class="intro-prompt active" data-step="0">A small world, watched more than played.</div>
+    <div class="intro-prompt" data-step="1">Drag to look around. Once inside, scroll to get close.</div>
+    <div class="intro-prompt" data-step="2">Tap the ground to nudge something awake — or tap a creature or tree to focus on it.</div>
+    <div class="intro-prompt" data-step="3">Everything here keeps living, even when you're not watching.</div>
+    <div class="intro-prompt" data-step="4">Come back later — your almanac remembers what you've found.</div>
   </div>
-  <button class="intro-skip" id="introSkip">skip →</button>
+  <div id="introScrollHint">scroll ↓</div>
 </div>
-<script>
-(function(){
-  var intro = document.getElementById('introScreen');
-  // a handful of twinkling stars for atmosphere, scattered once at load
-  for (var i=0;i<26;i++){
-    var s = document.createElement('div');
-    s.className = 'intro-star';
-    s.style.left = (Math.random()*100)+'%';
-    s.style.top = (Math.random()*100)+'%';
-    s.style.animationDelay = (Math.random()*3.4)+'s';
-    intro.appendChild(s);
-  }
-  var dismissed = false;
-  function dismissIntro(){
-    if (dismissed) return;
-    dismissed = true;
-    intro.classList.add('hidden');
-    setTimeout(function(){ intro.style.display = 'none'; }, 950);
-  }
-  document.getElementById('introSkip').addEventListener('click', function(e){
-    e.stopPropagation();
-    dismissIntro();
-  });
-  intro.addEventListener('click', dismissIntro);
-  setTimeout(dismissIntro, 4600);
-})();
-</script>
+<button class="intro-skip" id="introSkip">skip →</button>
 <div id="stage"><canvas id="c"></canvas></div>
 <div id="vignette"></div>
 <div id="loading">reading the shelf…</div>
@@ -486,6 +477,7 @@ resize();
    ========================================================= */
 var orbit = { theta: 0.62, phi: 1.05, radius: 8.2, minRadius: 0.5, maxRadius: 13, minPhi: 0.35, maxPhi: 1.48 };
 var pointer = { down:false, x:0, y:0 };
+var introActive = true; // while true, the scroll-driven walkthrough owns the camera; manual orbit input is ignored
 var idleTimer = 0;
 
 function updateCameraFromOrbit(){
@@ -528,6 +520,7 @@ canvas.addEventListener('pointerdown', function(e){
 });
 
 window.addEventListener('pointermove', function(e){
+  if (introActive) return;
   if (!activePointers.has(e.pointerId)) return;
   activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   idleTimer = 0;
@@ -556,6 +549,7 @@ window.addEventListener('pointerup', endPointer);
 window.addEventListener('pointercancel', endPointer);
 
 canvas.addEventListener('wheel', function(e){
+  if (introActive) return; // let the page scroll normally — that scroll IS the walkthrough
   e.preventDefault();
   idleTimer = 0;
   orbit.radius = Math.min(orbit.maxRadius, Math.max(orbit.minRadius, orbit.radius + e.deltaY * 0.01));
@@ -2477,6 +2471,8 @@ function loadWorldVisuals(jar){
   refreshSmallFloraInstances(jar, currentSampler);
   refreshFaunaVisuals(jar, currentSampler);
   document.getElementById('seedval').textContent = seedHex(jar.seed);
+  var nameLabel = document.getElementById('jarNameLabel');
+  if (nameLabel) nameLabel.textContent = jar.name;
 }
 
 async function switchToJar(seed){
@@ -2506,6 +2502,8 @@ async function switchToJar(seed){
 document.getElementById('newworld').addEventListener('click', async function(){
   var seed = randomSeed();
   var fresh = createFreshJarRecord(seed);
+  var chosen = window.prompt('Name your new jar:', fresh.name);
+  if (chosen && chosen.trim()) fresh.name = chosen.trim().slice(0, 40);
   jarIndex.push({ seed: seed, name: fresh.name, createdAt: fresh.createdAt, lastVisited: fresh.lastVisited });
   if (currentJar) await persistJar(currentJar);
   currentJar = fresh;
@@ -2527,7 +2525,7 @@ function animate(){
   var dt = Math.min(clock.getDelta(), 0.05);
   var elapsed = clock.elapsedTime;
 
-  if (!pointer.down){
+  if (!pointer.down && !introActive){
     idleTimer += dt;
     if (idleTimer > 4.5) orbit.theta += dt * 0.035;
   }
@@ -2663,6 +2661,105 @@ async function boot(){
 
   animate();
 }
+
+/* =========================================================
+   INTRO WALKTHROUGH — scroll-driven, controls the real jar
+   ========================================================= */
+var introOverlay = document.getElementById('introOverlay');
+var introBg = document.getElementById('introBg');
+var introSigil = document.getElementById('introSigil');
+var introTitleText = document.getElementById('introTitleText');
+var introScrollHint = document.getElementById('introScrollHint');
+var introSkipBtn = document.getElementById('introSkip');
+var introPrompts = Array.prototype.slice.call(document.querySelectorAll('.intro-prompt'));
+var stageEl = document.getElementById('stage');
+var introStartTheta = orbit.theta;
+var introStartRadius = 13; // camera begins pulled well back, then drifts in as the user scrolls
+
+// a handful of twinkling stars behind the title, scattered once
+for (var introI=0; introI<26; introI++){
+  var introStar = document.createElement('div');
+  introStar.className = 'intro-star';
+  introStar.style.left = (Math.random()*100)+'%';
+  introStar.style.top = (Math.random()*100)+'%';
+  introStar.style.animationDelay = (Math.random()*3.4)+'s';
+  introBg.appendChild(introStar);
+}
+
+// the page itself scrolls during the walkthrough (the tall spacer drives it);
+// the canvas must let touch gestures through, and the page is locked again afterwards
+document.documentElement.style.overflowY = 'auto';
+document.body.style.overflowY = 'auto';
+canvas.style.touchAction = 'pan-y';
+stageEl.style.opacity = '0';
+stageEl.style.transform = 'scale(0.86)';
+orbit.radius = introStartRadius;
+var uiLayerEl = document.getElementById('ui');
+uiLayerEl.style.opacity = '0';
+uiLayerEl.style.visibility = 'hidden'; // visibility (unlike pointer-events) is inherited by children that opt back into events
+uiLayerEl.style.transition = 'opacity 0.8s ease';
+
+function setIntroStep(frac){
+  var stepIdx = Math.min(introPrompts.length-1, Math.floor(frac*introPrompts.length));
+  introPrompts.forEach(function(p, idx){ p.classList.toggle('active', idx === stepIdx); });
+}
+
+function onIntroScroll(){
+  if (!introActive) return;
+  var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  var frac = Math.min(1, Math.max(0, window.scrollY / maxScroll));
+
+  // the jar materializes out of the dark over the first stretch of scroll
+  var matProg = Math.min(1, frac/0.12);
+  stageEl.style.opacity = String(matProg);
+  stageEl.style.transform = 'scale(' + (0.86 + 0.14*matProg) + ')';
+  introBg.style.opacity = String(1 - matProg);
+
+  // title and sigil lift away once the jar has appeared
+  var titleFade = 1 - Math.min(1, Math.max(0, (frac-0.05)/0.13));
+  var lift = 'translateY(' + (-(1-titleFade)*12) + 'px)';
+  introSigil.style.opacity = String(titleFade);
+  introTitleText.style.opacity = String(titleFade);
+  introSigil.style.transform = lift;
+  introTitleText.style.transform = lift;
+  introScrollHint.classList.toggle('hidden', frac > 0.04);
+
+  // the jar turns on itself while the camera drifts in to its normal framing
+  orbit.theta = introStartTheta + frac * Math.PI * 2.4;
+  orbit.radius = introStartRadius + (8.2 - introStartRadius) * Math.min(1, frac/0.6);
+  updateCameraFromOrbit();
+
+  setIntroStep(frac);
+  if (frac >= 0.995) finishIntro();
+}
+
+function finishIntro(){
+  if (!introActive) return;
+  introActive = false;
+  introOverlay.classList.add('hidden');
+  introSkipBtn.classList.add('hidden');
+  stageEl.style.opacity = '1';
+  stageEl.style.transform = 'none';
+  canvas.style.touchAction = 'none';
+  document.documentElement.style.overflowY = 'hidden';
+  document.body.style.overflowY = 'hidden';
+  window.scrollTo(0, 0);
+  orbit.theta = introStartTheta;
+  orbit.radius = 8.2;
+  idleTimer = 0;
+  uiLayerEl.style.visibility = 'visible';
+  setTimeout(function(){ uiLayerEl.style.opacity = '1'; }, 30);
+  setTimeout(function(){
+    introOverlay.style.display = 'none';
+    introSkipBtn.style.display = 'none';
+    var spacer = document.getElementById('introSpacer');
+    if (spacer) spacer.style.display = 'none';
+  }, 900);
+}
+
+introSkipBtn.addEventListener('click', finishIntro);
+window.addEventListener('scroll', onIntroScroll);
+onIntroScroll();
 
 boot();
 })();
