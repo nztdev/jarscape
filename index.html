@@ -30,13 +30,15 @@
   #ui > *{ pointer-events:auto; }
 
   #title{
-    position:fixed; top:22px; left:26px;
+    position:fixed; top:16px; left:16px;
     color: var(--ink);
     letter-spacing: 0.22em;
     font-size: 12px;
     text-transform: uppercase;
     font-family: Georgia, serif;
-    opacity: 0.85;
+    background: var(--panel); padding: 10px 14px; border-radius: 12px;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    max-width: min(260px, calc(100vw - 240px));
   }
   #title small{
     display:block; margin-top:6px;
@@ -44,8 +46,8 @@
     letter-spacing: 0.02em;
     text-transform: none;
     font-size: 11.5px;
-    color: var(--ink-dim);
-    max-width: 230px;
+    color: var(--ink);
+    opacity: 0.8;
     line-height:1.5;
   }
 
@@ -332,17 +334,24 @@
     color: var(--ink); margin:0 0 34px 0; text-shadow: 0 0 34px rgba(242,166,90,0.35);
     transition: opacity 0.6s ease, transform 0.6s ease;
   }
-  #introPrompts{ position:relative; width:min(86vw,520px); height:76px; }
+  #introPrompts{
+    position:relative; width:min(86vw,520px); height:84px;
+    background: rgba(12,12,18,0.62); border-radius:16px;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+  }
   .intro-prompt{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    text-align:center; font-family: Georgia, serif; font-style: italic; color: var(--ink-dim);
+    text-align:center; font-family: Georgia, serif; font-style: italic; color: var(--ink);
     font-size: 16px; line-height:1.55; opacity:0; transition: opacity 0.6s ease;
+    padding: 0 22px; text-shadow: 0 1px 10px rgba(0,0,0,0.65);
   }
   .intro-prompt.active{ opacity:1; }
   #introScrollHint{
     position:absolute; bottom:60px; left:50%; transform:translateX(-50%);
     font-family: -apple-system, sans-serif; font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
-    color: var(--ink-dim); opacity:0.6; transition: opacity 0.4s ease;
+    color: var(--ink); opacity:0.9; transition: opacity 0.4s ease;
+    background: rgba(12,12,18,0.55); padding: 7px 14px; border-radius: 999px;
     animation: hintBob 1.8s ease-in-out infinite;
   }
   @keyframes hintBob{ 0%,100%{ transform:translate(-50%,0); } 50%{ transform:translate(-50%,6px); } }
@@ -900,7 +909,7 @@ function createTerrainSampler(seed){
   var landOffsetX = 0, landOffsetZ = 0;
   if (waterBody === 'sea'){
     var offAng = rng()*Math.PI*2;
-    var offDist = TERRAIN_HALF*0.62;
+    var offDist = TERRAIN_HALF*0.42;
     landOffsetX = Math.cos(offAng)*offDist; landOffsetZ = Math.sin(offAng)*offDist;
   }
 
@@ -917,7 +926,10 @@ function createTerrainSampler(seed){
     var dist = Math.hypot(wx-landOffsetX, wz-landOffsetZ) / TERRAIN_HALF;
     var n = fbm(noise2D, wx*0.95+ox, wz*0.95+oz, 5);
     var falloff = smoothstep(0.32, 1.05, dist);
-    return ((n*0.5+0.5) - falloff*1.2) * AMPLITUDE * ampMult;
+    // the terrain mesh is a finite square; land that is still high at its edge gets visibly sliced off
+    // (this is the straight-edged slab seen on 'sea' jars), so sink everything smoothly before the boundary
+    var edge = smoothstep(0.70, 0.97, Math.max(Math.abs(x), Math.abs(z)) / TERRAIN_HALF);
+    return ((n*0.5+0.5) - falloff*1.2 - edge*1.5) * AMPLITUDE * ampMult;
   }
   function slopeAt(x,z){
     var d = 0.06;
@@ -941,12 +953,11 @@ function createFreshEntities(sampler){
   var entities = { trees: [], smallFlora: [] };
   ALL_FAUNA.forEach(function(sp){ entities[sp] = []; });
 
-  // computed once, locally, from the sampler itself — never the global currentPondRadius,
-  // which can be stale (still holding a *previous* jar's value) at the moment a brand-new
-  // jar's entities are first scattered, before rebuildStaticWorld has run for this seed
+  // computed locally from the sampler (never the global currentPondRadius, which can still hold
+  // a previous jar's value while a brand-new jar is being scattered) — used to keep fish in the pond
   var pondR = pondRadiusFor(sampler.biome, sampler.waterBody);
 
-  var maxTrees = 44, id = 0;
+  var maxTrees = 64, id = 0;
   var attempts = 0;
   var treeSpecies = biomeDef.trees.length ? biomeDef.trees : ['tree_pine'];
   while (entities.trees.length < maxTrees && attempts < maxTrees*14){
@@ -955,7 +966,6 @@ function createFreshEntities(sampler){
     var z = (rng()*2-1) * TERRAIN_HALF * 0.92;
     var h = sampler.heightAt(x,z);
     if (h < 0.06 || h > 0.46) continue;
-    if (Math.hypot(x,z) < pondR + 0.12) continue; // the pond disc's actual size, not just terrain height, decides what's submerged
     if (sampler.slopeAt(x,z) > 1.6) continue;
     entities.trees.push({
       id: 'tree'+(id++),
@@ -976,7 +986,6 @@ function createFreshEntities(sampler){
       var fz = (rng()*2-1) * TERRAIN_HALF * 0.9;
       var fh = sampler.heightAt(fx,fz);
       if (fh < -0.02 || fh > 0.28) continue;   // damp, low ground — near the waterline
-      if (Math.hypot(fx,fz) < pondR - 0.05) continue; // allowed right up to the edge, but not inside open water
       if (sampler.slopeAt(fx,fz) > 1.8) continue;
       var age = rng()*2;
       entities.smallFlora.push({
@@ -1135,7 +1144,7 @@ var pineFoliageMat = new THREE.MeshStandardMaterial({ color: 0x3f6b3a, roughness
 var brambleFoliageMat = new THREE.MeshStandardMaterial({ color: 0x6d7f39, roughness: 0.85, map: leafMottleTex });
 var snowPineFoliageMat = new THREE.MeshStandardMaterial({ color: 0x6f8f7a, roughness: 0.8, map: leafMottleTex });
 
-var MAX_TREES = 46;
+var MAX_TREES = 70;
 var trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, MAX_TREES);
 var pineMesh = new THREE.InstancedMesh(pineFoliageGeo, pineFoliageMat, MAX_TREES);
 var brambleMesh = new THREE.InstancedMesh(brambleFoliageGeo, brambleFoliageMat, MAX_TREES);
@@ -1196,7 +1205,6 @@ function buildDwelling(sampler){
     var tx=(sampler.rng()*2-1)*TERRAIN_HALF*0.7, tz=(sampler.rng()*2-1)*TERRAIN_HALF*0.7;
     var th=sampler.heightAt(tx,tz);
     if (th<0.08 || th>0.4) continue;
-    if (Math.hypot(tx,tz) < currentPondRadius + 0.3) continue;
     if (sampler.slopeAt(tx,tz)>1.2) continue;
     dx=tx; dz=tz; dh=th; found=true;
   }
@@ -1368,7 +1376,6 @@ function rebuildStaticWorld(sampler){
     var rz = (sampler.rng()*2-1) * TERRAIN_HALF * 0.95;
     var rh = sampler.heightAt(rx,rz);
     if (rh < 0.0) continue;
-    if (Math.hypot(rx,rz) < pondR - 0.02) continue;
     dummy.position.set(rx, rh+0.02, rz);
     dummy.rotation.set(sampler.rng()*Math.PI, sampler.rng()*Math.PI, sampler.rng()*Math.PI);
     dummy.scale.setScalar(0.6+sampler.rng()*1.3);
@@ -1389,7 +1396,6 @@ function rebuildStaticWorld(sampler){
       var dz = (sampler.rng()*2-1) * TERRAIN_HALF * 0.95;
       var dh = sampler.heightAt(dx,dz);
       if (dh < -0.03 || dh > 0.08) continue;
-      if (Math.abs(Math.hypot(dx,dz) - pondR) > 0.35) continue; // must actually be near the water's edge, not just at a "low enough" height
       dummy.position.set(dx, dh+0.02, dz);
       dummy.rotation.set(Math.PI/2, sampler.rng()*Math.PI*2, sampler.rng()*0.3);
       dummy.scale.setScalar(0.7+sampler.rng()*0.9);
@@ -1411,7 +1417,6 @@ function rebuildStaticWorld(sampler){
     var gz = (sampler.rng()*2-1) * TERRAIN_HALF * 0.92;
     var gh = sampler.heightAt(gx,gz);
     if (gh < 0.03 || gh > 0.42) continue;
-    if (Math.hypot(gx,gz) < pondR + 0.03) continue;
     if (sampler.slopeAt(gx,gz) > 1.5) continue;
     grassBlades.push({ x:gx, y:gh, z:gz, rotY: sampler.rng()*Math.PI*2, scale: 0.7+sampler.rng()*0.8, phase: sampler.rng()*Math.PI*2 });
   }
